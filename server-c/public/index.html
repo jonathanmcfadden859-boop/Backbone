@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SVG Bezier Drawing Tool</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>SVG Bezier Drawing Tool</h1>
+
+        <div class="panel">
+            <div class="button-group">
+                <button id="clearBtn" class="btn-clear">Clear Canvas</button>
+                <button id="exportBtn" class="btn-export" disabled>Export SVG</button>
+                <button id="copyBtn" class="btn-copy" disabled>Copy SVG Code</button>
+                <button id="transmitBtn" class="btn-toggle" disabled
+                    style="background-color: #f59e0b;">Transmit</button>
+                <button id="toggleBtn" class="btn-toggle">Show SVG Paths</button>
+                <a href="/config" style="text-decoration: none;"><button type="button" class="btn-toggle"
+                        style="background-color: #6b7280;">Config</button></a>
+            </div>
+
+            <svg id="canvas" width="800" height="600"></svg>
+
+            <p class="hint">
+                Draw on the canvas above. Your strokes will be converted to smooth SVG Bezier curves in real-time.
+            </p>
+        </div>
+
+        <div id="svgOutput" class="panel hidden">
+            <h2>SVG Path Data</h2>
+            <div id="pathList" class="svg-output"></div>
+        </div>
+    </div>
+
+    <script src="js/drawing.js"></script>
+</body>
+
+</html>

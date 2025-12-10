@@ -1,0 +1,144 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: #f3f4f6;
+    padding: 2rem;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+h1 {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #1f2937;
+    margin-bottom: 1.5rem;
+}
+
+.panel {
+    background-color: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.button-group {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+button {
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+button:disabled {
+    background-color: #d1d5db;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.btn-clear {
+    background-color: #ef4444;
+    color: white;
+}
+
+.btn-clear:hover:not(:disabled) {
+    background-color: #dc2626;
+}
+
+.btn-export {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.btn-export:hover:not(:disabled) {
+    background-color: #2563eb;
+}
+
+.btn-copy {
+    background-color: #10b981;
+    color: white;
+}
+
+.btn-copy:hover:not(:disabled) {
+    background-color: #059669;
+}
+
+.btn-toggle {
+    background-color: #8b5cf6;
+    color: white;
+}
+
+.btn-toggle:hover:not(:disabled) {
+    background-color: #7c3aed;
+}
+
+#canvas {
+    border: 2px solid #d1d5db;
+    border-radius: 0.375rem;
+    cursor: crosshair;
+    background-color: white;
+    display: block;
+}
+
+.hint {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-top: 1rem;
+}
+
+.svg-output {
+    background-color: #f9fafb;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid #e5e7eb;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.svg-output h2 {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #1f2937;
+    margin-bottom: 1rem;
+}
+
+.path-item {
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: #374151;
+    word-wrap: break-word;
+}
+
+.path-item:last-child {
+    border-bottom: none;
+}
+
+.path-label {
+    color: #2563eb;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.hidden {
+    display: none;
+}

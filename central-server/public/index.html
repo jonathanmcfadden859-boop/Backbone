@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central Server Admin</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="card">
+        <h1>Central Hub</h1>
+        <p>Manage your WebSocket Network</p>
+
+        <div class="key-container">
+            <h3>Current Session Key</h3>
+            <div id="sessionKey" class="key-display">Loading...</div>
+            <button onclick="regenerateKey()">Regenerate Key</button>
+        </div>
+
+        <div class="status">
+            Connected Nodes: <span id="connectionCount">0</span>
+        </div>
+    </div>
+
+    <script src="js/admin.js"></script>
+</body>
+
+</html>

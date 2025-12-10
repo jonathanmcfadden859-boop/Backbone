@@ -1,0 +1,54 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.card {
+    background: white;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 400px;
+    text-align: center;
+}
+
+h1 {
+    color: #1a1a1a;
+    margin-bottom: 0.5rem;
+}
+
+.key-display {
+    font-family: monospace;
+    font-size: 1.5rem;
+    background: #eee;
+    padding: 1rem;
+    border-radius: 6px;
+    margin: 1.5rem 0;
+    word-break: break-all;
+}
+
+button {
+    background: #0070f3;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+button:hover {
+    background: #0051a2;
+}
+
+.status {
+    margin-top: 1rem;
+    color: #666;
+    font-size: 0.9rem;
+}
