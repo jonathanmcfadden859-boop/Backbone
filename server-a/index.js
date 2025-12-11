@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import 'dotenv/config';
 
 import { createInterface } from 'readline';
 
@@ -12,6 +13,7 @@ const __dirname = path.dirname(__filename);
 const port = 8080;
 const SERVER_ID = 'SERVER_A';
 const app = express();
+const CENTRAL_URL = process.env.CENTRAL_SERVER_URL || 'ws://localhost:8090';
 
 app.use(express.json());
 
@@ -105,7 +107,7 @@ async function connectToCentral(key) {
     }
 
     try {
-        const wsUrl = `ws://localhost:8090?key=${key}`;
+        const wsUrl = `${CENTRAL_URL}?key=${key}`;
         console.log(`[${SERVER_ID}] Attempting WebSocket connection to: ${wsUrl}`);
 
         const ws = new WebSocket(wsUrl);
