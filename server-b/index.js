@@ -27,6 +27,10 @@ app.get('/config', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'config.html'));
 });
 
+app.get('/test', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'test.html'));
+});
+
 app.post('/api/connect', (req, res) => {
     const { key } = req.body;
     if (!key) {
