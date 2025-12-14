@@ -15,16 +15,68 @@ const server = createServer(app);
 // State
 let sessionKey = randomUUID(); // Initial session key
 let connections = new Set();
+let sessionSettings = {
+    width: 800,
+    height: 600,
+    fps: 8,
+    maxFrames: 20
+};
+
+// Frame Data History
+// Note: If maxFrames changes, we might need to resize this array.
+let globalFrames = Array(sessionSettings.maxFrames).fill().map(() => []);
 
 // Serve static files (admin interface)
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json()); // Ensure JSON body parsing
 
 // API Routes
 app.get('/api/status', (req, res) => {
     res.json({
         sessionKey,
-        connections: connections.size
+        connections: connections.size,
+        settings: sessionSettings
     });
+});
+
+app.post('/api/settings', (req, res) => {
+    const { width, height, fps, maxFrames } = req.body;
+
+    // Update settings
+    if (width) sessionSettings.width = parseInt(width);
+    if (height) sessionSettings.height = parseInt(height);
+    if (fps) sessionSettings.fps = parseInt(fps);
+
+    if (maxFrames) {
+        const newMax = parseInt(maxFrames);
+        if (newMax !== sessionSettings.maxFrames) {
+            sessionSettings.maxFrames = newMax;
+            // Resize globalFrames history
+            // If shrinking, we lose frames. If growing, we add empty arrays.
+            if (newMax > globalFrames.length) {
+                // Grow
+                const added = Array(newMax - globalFrames.length).fill().map(() => []);
+                globalFrames = globalFrames.concat(added);
+            } else {
+                // Shrink
+                globalFrames = globalFrames.slice(0, newMax);
+            }
+        }
+    }
+
+    console.log('[Central] Session Settings Updated:', sessionSettings);
+
+    // Broadcast new settings to all clients
+    const msg = JSON.stringify({
+        type: 'settings_update',
+        settings: sessionSettings
+    });
+
+    connections.forEach(ws => {
+        if (ws.readyState === 1) ws.send(msg);
+    });
+
+    res.json({ success: true, settings: sessionSettings });
 });
 
 app.post('/api/regenerate', (req, res) => {
@@ -36,6 +88,10 @@ app.post('/api/regenerate', (req, res) => {
         ws.send(JSON.stringify({ type: 'system', message: 'Session key changed. Disconnecting.' }));
         ws.close(1008, 'Session Key Changed');
     });
+
+    // Optional: Clear history on key regeneration? 
+    // Usually a new session means a clean slate.
+    globalFrames = Array(MAX_FRAMES).fill().map(() => []);
 
     res.json({ success: true, sessionKey });
 });
@@ -65,21 +121,62 @@ wss.on('connection', function connection(ws) {
     connections.add(ws);
     console.log('[Central] Node connected');
 
+    // Send Current Settings
+    ws.send(JSON.stringify({
+        type: 'settings_update',
+        settings: sessionSettings
+    }));
+
+    // Send Initial Snapshot of History
+    // We send it as a series of drawing_updates or a single snapshot type?
+    // Client currently handles 'drawing_update'. To minimize client changes, 
+    // let's send a bulk drawing_update for EACH frame that has content.
+    // Or we could implement a 'snapshot' type if we updated the client.
+    // Let's stick to 'drawing_update' compatibility to start.
+
+    console.log('[Central] Sending history snapshot to new client...');
+    let totalPathsSent = 0;
+
+    globalFrames.forEach((paths, index) => {
+        if (paths.length > 0) {
+            const msg = {
+                type: 'drawing_update',
+                frameIndex: index,
+                paths: paths,
+                sender: 'CENTRAL_HISTORY'
+            };
+            ws.send(JSON.stringify(msg));
+            totalPathsSent += paths.length;
+        }
+    });
+    console.log(`[Central] Snapshot sent (${totalPathsSent} paths).`);
+
+
     ws.on('error', console.error);
 
     ws.on('message', function message(data, isBinary) {
         // Broadcast to all other clients
-        // We expect the message to happen to be JSON and include sender ID, but 
-        // strictly speaking, the central hub just redistributes.
-        // However, the prompt says "sends it out to all of the nodes at once".
-
-        // We can parse it to log, but for efficiency/simplicity we can just blindly broadcast to everyone
-        // The prompt says "ignores messages that come back to it with it's own id",
-        // which implies we can just echo to everyone including sender, or everyone except sender.
-        // "sends it out to ALL of the nodes at once" -> usually implies broadcast to all connected.
-
         const msgString = isBinary ? data : data.toString();
-        console.log(`[Central] Broadcasting: ${msgString.substring(0, 50)}...`);
+        // console.log(`[Central] Broadcasting: ${msgString.substring(0, 50)}...`);
+
+        // Parse and Store History
+        try {
+            const parsed = JSON.parse(msgString);
+            if (parsed.type === 'drawing_update' && Array.isArray(parsed.paths)) {
+                // Default to frame 0 if not specified
+                const fIndex = (typeof parsed.frameIndex === 'number') ? parsed.frameIndex : 0;
+
+                if (fIndex >= 0 && fIndex < MAX_FRAMES) {
+                    parsed.paths.forEach(p => globalFrames[fIndex].push(p));
+                }
+            } else if (parsed.type === 'clear_frame') {
+                // Future feature: handle clear
+                // const fIndex = parsed.frameIndex;
+                // globalFrames[fIndex] = [];
+            }
+        } catch (e) {
+            // Non-JSON message, or system message we don't store
+        }
 
         connections.forEach(client => {
             if (client.readyState === 1) { // OPEN

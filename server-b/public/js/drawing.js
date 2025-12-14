@@ -109,11 +109,75 @@ ws.onmessage = (event) => {
                     // So we won't re-transmit them. This works perfectly!
                 }
             }
+        } else if (data.type === 'settings_update' && data.settings) {
+            console.log('Received session settings update:', data.settings);
+            applySessionSettings(data.settings);
         }
     } catch (e) {
         // console.log('Received non-drawing message', event.data);
     }
 };
+
+function applySessionSettings(settings) {
+    // 1. Update Canvas Dimensions
+    if (settings.width && settings.height) {
+        canvas.setAttribute('width', settings.width);
+        canvas.setAttribute('height', settings.height);
+        // Also update preview canvas viewBox for scaling
+        const previewCanvas = document.getElementById('previewCanvas');
+        if (previewCanvas) {
+            previewCanvas.setAttribute('width', settings.width / 2); // Keep preview smaller? Or just aspect ratio?
+            // Existing CSS hardcodes preview container size, let's just make sure viewBox is correct
+            // Actually, existing logic: previewCanvas width=400 height=300.
+            // Let's scale it to maintain aspect ratio relative to 400px width?
+            // Or just set viewBox.
+            previewCanvas.setAttribute('viewBox', `0 0 ${settings.width} ${settings.height}`);
+            // Update preview pixel size if we want
+            previewCanvas.setAttribute('width', 400);
+            previewCanvas.setAttribute('height', 400 * (settings.height / settings.width));
+        }
+
+        // Update Info Text
+        const infoSpan = document.querySelector('.canvas-info');
+        if (infoSpan) {
+            infoSpan.textContent = `Canvas: ${settings.width} x ${settings.height}px | Preview: ${settings.fps} FPS`;
+        }
+    }
+
+    // 2. Update Framerate
+    if (settings.fps) {
+        FPS = settings.fps;
+        frameDuration = 1000 / FPS;
+        // Animation loop uses these global vars
+    }
+
+    // 3. Update Max Frames
+    if (settings.maxFrames) {
+        const newMax = parseInt(settings.maxFrames);
+        if (newMax !== MAX_FRAMES) {
+            const oldMax = MAX_FRAMES;
+            MAX_FRAMES = newMax;
+
+            // Resize frames array
+            if (newMax > frames.length) {
+                // Grow
+                const added = Array(newMax - frames.length).fill().map(() => []);
+                frames = frames.concat(added);
+            } else {
+                // Shrink (this loses data on the client side!)
+                frames = frames.slice(0, newMax);
+            }
+
+            // Adjust current frame index if it's now out of bounds
+            if (currentFrameIndex >= MAX_FRAMES) {
+                switchFrame(MAX_FRAMES - 1);
+            }
+
+            // Re-generate buttons
+            initFrameButtons();
+        }
+    }
+}
 
 // ... (simplifyPoints logic remains largely unchanged) ...
 function simplifyPoints(points, tolerance = 2) {
