@@ -4,37 +4,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SVG Bezier Drawing Tool</title>
+    <title>Collaborative Drawing</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="vendor/phosphor/phosphor.css">
 </head>
 
 <body>
-    <div class="container">
-        <h1>SVG Bezier Drawing Tool</h1>
+    <div class="app-container">
+        <div id="customCursor" class="custom-cursor"></div>
+        <!-- Top Toolbar -->
+        <!-- Top Info Bar -->
+        <header class="top-bar">
+            <div class="app-title">Framed International: Collaborative Drawing Studio</div>
+            <div class="top-controls">
+                <span class="canvas-info">Canvas: 800 x 600px | Preview: 400 x 300px</span>
+                <a href="/config" class="btn btn-sm btn-outline">Config</a>
+            </div>
+        </header>
 
-        <div class="panel">
-            <div class="button-group">
-                <button id="clearBtn" class="btn-clear">Clear Canvas</button>
-                <button id="exportBtn" class="btn-export" disabled>Export SVG</button>
-                <button id="copyBtn" class="btn-copy" disabled>Copy SVG Code</button>
-                <button id="transmitBtn" class="btn-toggle" disabled
-                    style="background-color: #f59e0b;">Transmit</button>
-                <button id="toggleBtn" class="btn-toggle">Show SVG Paths</button>
-                <a href="/config" style="text-decoration: none;"><button type="button" class="btn-toggle"
-                        style="background-color: #6b7280;">Config</button></a>
+        <!-- Main Tools Toolbar -->
+        <section class="toolbar">
+            <!-- Left: Tools -->
+            <div class="tool-group">
+                <button class="tool-btn active" title="Pencil"><i class="ph ph-pencil-simple"></i></button>
+                <button class="tool-btn" title="Eraser"><i class="ph ph-eraser"></i></button>
             </div>
 
-            <svg id="canvas" width="800" height="600"></svg>
+            <div class="separator"></div>
 
-            <p class="hint">
-                Draw on the canvas above. Your strokes will be converted to smooth SVG Bezier curves in real-time.
-            </p>
-        </div>
+            <!-- Middle: Sliders -->
+            <div class="tool-settings">
+                <div class="slider-group">
+                    <label>Size:</label>
+                    <input type="range" min="1" max="20" value="3" class="slider" id="sizeSlider">
+                    <span class="value" id="sizeValue">3</span>
+                </div>
+                <div class="slider-group">
+                    <label>Opacity:</label>
+                    <input type="range" min="0" max="100" value="100" class="slider" id="opacitySlider">
+                    <span class="value" id="opacityValue">100%</span>
+                </div>
+            </div>
 
-        <div id="svgOutput" class="panel hidden">
-            <h2>SVG Path Data</h2>
-            <div id="pathList" class="svg-output"></div>
+            <div class="separator"></div>
+
+            <!-- Actions -->
+            <div class="action-group">
+                <button id="clearBtn" class="tool-btn danger" title="Clear Canvas"><i class="ph ph-trash"></i></button>
+                <button id="saveBtn" class="tool-btn" title="Save"><i class="ph ph-floppy-disk"></i></button>
+            </div>
+            <!-- Right: Colors -->
+            <div class="color-picker">
+                <div class="color-swatch active primary-swatch" style="background-color: #000000;"></div>
+                <div class="color-swatch secondary-swatch" style="background-color: #ffffff;"></div>
+                <div class="color-gradient" title="Spectrum"></div>
+                <div class="color-gradient-gray" title="Grayscale"></div>
+            </div>
+
+            <div class="spacer"></div>
+
+            <!-- Transmit (Keep existing) -->
+            <button id="transmitBtn" class="btn-action" disabled>Transmit</button>
+        </section>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <!-- Left: Drawing Canvas -->
+            <div class="drawing-panel">
+                <div class="panel-header">
+                    <span class="badge-orange">Frame <span id="currentFrameDisplay">1</span> / 20</span>
+                </div>
+                <div class="canvas-wrapper">
+                    <svg id="canvas" width="800" height="600"></svg>
+                </div>
+            </div>
+
+            <!-- Right: Animation Preview -->
+            <div class="preview-panel">
+                <div class="panel-header text-center">
+                    Animation Preview • 8 FPS • 1:2 Scale
+                </div>
+                <div class="preview-wrapper">
+                    <svg id="previewCanvas" width="400" height="300"></svg>
+                </div>
+                <button id="fullscreenBtn" class="btn-outline">Pro-Fullscreen</button>
+            </div>
+        </main>
+
+        <!-- Bottom Timeline -->
+        <footer class="timeline-area">
+
+            <div class="frames-grid" id="frameGrid">
+                <!-- Javascript will populate, or we hardcode for structure -->
+                <button class="frame-btn active">1</button>
+                <button class="frame-btn">2</button>
+                <button class="frame-btn">3</button>
+                <button class="frame-btn">4</button>
+                <button class="frame-btn">5</button>
+                <button class="frame-btn">6</button>
+                <button class="frame-btn">7</button>
+                <button class="frame-btn">8</button>
+                <button class="frame-btn">9</button>
+                <button class="frame-btn">10</button>
+                <button class="frame-btn">11</button>
+                <button class="frame-btn">12</button>
+                <button class="frame-btn">13</button>
+                <button class="frame-btn">14</button>
+                <button class="frame-btn">15</button>
+                <button class="frame-btn">16</button>
+                <button class="frame-btn">17</button>
+                <button class="frame-btn">18</button>
+                <button class="frame-btn">19</button>
+                <button class="frame-btn">20</button>
+            </div>
+        </footer>
+
+        <!-- Bottom Status Bar -->
+        <div class="status-bar">
+            <span class="status-badge offline">Offline</span>
+            <span class="status-item">Ready</span>
+            <span class="status-item status-item-tool">Tool: Pencil</span>
+            <span class="status-item flex-grow">You are currently drawing with participants from: Unknown</span>
         </div>
+    </div>
+
+    <!-- Hidden elements kept for JS compatibility if needed, or refactored out later -->
+    <div style="display:none;">
+        <button id="exportBtn">Export</button>
+        <button id="copyBtn">Copy</button>
+        <button id="toggleBtn">Toggle</button>
+        <div id="svgOutput"></div>
+        <div id="pathList"></div>
     </div>
 
     <script src="js/drawing.js"></script>

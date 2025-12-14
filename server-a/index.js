@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
-import { createInterface } from 'readline';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,11 +16,6 @@ const app = express();
 const CENTRAL_URL = process.env.CENTRAL_SERVER_URL || 'ws://localhost:8090';
 
 app.use(express.json());
-
-const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -89,14 +84,8 @@ wss.on('connection', (ws) => {
 // We still listen on a port for the web interface
 server.listen(port, () => {
     console.log(`${SERVER_ID} listening on http://localhost:${port}`);
-    promptForKey();
+    console.log(`[${SERVER_ID}] Waiting for Session Key via Web Interface (/config)...`);
 });
-
-function promptForKey() {
-    rl.question(`[${SERVER_ID}] Enter Session Key for Central: `, (key) => {
-        connectToCentral(key.trim());
-    });
-}
 
 // Central Server Connection Logic
 let wsClientStatus = 'disconnected';
@@ -165,8 +154,9 @@ async function connectToCentral(key) {
 
         ws.on('close', (code, reason) => {
             console.log(`[${SERVER_ID}] WebSocket Closed. Code: ${code}, Reason: '${reason}'`);
+            console.log(`[${SERVER_ID}] WebSocket Closed. Code: ${code}, Reason: '${reason}'`);
             wsClientStatus = 'disconnected';
-            promptForKey();
+            console.log(`[${SERVER_ID}] Disconnected. Reconnect via Web Interface.`);
         });
 
         ws.on('error', (err) => {
@@ -182,7 +172,7 @@ async function connectToCentral(key) {
         // Only prompt via CLI if this was a CLI flow or general failure, 
         // but for now it's fine to just log.
         console.log(`[${SERVER_ID}] Please retry via CLI or Web Interface.`);
-        promptForKey();
+
     }
 }
 

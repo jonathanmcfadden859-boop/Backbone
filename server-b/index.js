@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import 'dotenv/config';
 
-import { createInterface } from 'readline';
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,21 +14,23 @@ const port = 8081;
 const SERVER_ID = 'SERVER_B';
 const app = express();
 const CENTRAL_URL = process.env.CENTRAL_SERVER_URL || 'ws://localhost:8090';
+
 app.use(express.json());
 
-const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
-
+// Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Configuration API
 app.get('/config', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'config.html'));
 });
 
 app.get('/test', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'test.html'));
+});
+
+app.get('/api/status', (req, res) => {
+    res.json({ status: wsClientStatus });
 });
 
 app.post('/api/connect', (req, res) => {
@@ -44,49 +46,57 @@ app.post('/api/connect', (req, res) => {
 
 const server = createServer(app);
 
-// Browser WebSocket Server
+// Browser WebSocket Server (for drawing updates)
 const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
     console.log(`[${SERVER_ID}] Local browser client connected.`);
+
     ws.on('message', (message) => {
         try {
+            // Forward message from browser to Central
+            // Ideally we check credentials or type, but for now we forward
             if (currentWs && currentWs.readyState === WebSocket.OPEN) {
+                // message is Buffer, convert to string
                 const msgString = message.toString();
                 sendMessage(currentWs, msgString);
+                console.log(`[${SERVER_ID}] Forwarded drawing data to Central.`);
+            } else {
+                console.log(`[${SERVER_ID}] Cannot forward: Not connected to Central.`);
             }
+
+            // Also echo back to other local browsers? 
+            // The prompt says "broadcast... to the central. This way... it appears an all of the canvases".
+            // If we only send to central, central will echo it back to OTHER servers.
+            // Does Central echo back to the SENDER? 
+            // "Ignore messages from self" in `ws.on('message')` prevents this. 
+            // So we should broadcast to OTHER local browsers manually if we want them to see it, 
+            // but for a single browser per server (likely use case), it's already on the user's screen.
+            // If multiple tabs are open on Server A, they won't see it unless we broadcast locally too.
+            // But let's stick to the main flow: Browser -> Server A -> Central -> Server B/C -> Browser.
+
         } catch (e) {
             console.error('Error handling local message:', e);
         }
     });
 });
 
+// We still listen on a port for the web interface
 server.listen(port, () => {
     console.log(`${SERVER_ID} listening on http://localhost:${port}`);
-    promptForKey();
+    console.log(`[${SERVER_ID}] Waiting for Session Key via Web Interface (/config)...`);
 });
-
-function promptForKey() {
-    rl.question(`[${SERVER_ID}] Enter Session Key for Central: `, (key) => {
-        connectToCentral(key.trim());
-    });
-}
 
 // Central Server Connection Logic
-let currentWs = null;
 let wsClientStatus = 'disconnected';
-
-app.get('/api/status', (req, res) => {
-    res.json({ status: wsClientStatus });
-});
+let currentWs = null;
 
 async function connectToCentral(key) {
     if (currentWs) {
         console.log(`[${SERVER_ID}] Closing existing connection to connect with new key...`);
-        currentWs.removeAllListeners();
+        currentWs.removeAllListeners(); // Prevent old handlers from firing reconnection logic
         currentWs.close();
         currentWs = null;
-        wsClientStatus = 'disconnected';
     }
 
     try {
@@ -99,29 +109,54 @@ async function connectToCentral(key) {
         ws.on('open', () => {
             console.log(`[${SERVER_ID}] WebSocket Open: Connected to Central Hub successfully!`);
             wsClientStatus = 'connected';
+
+            // Send a hello message
             sendMessage(ws, JSON.stringify({ type: 'system', message: `Hello from ${SERVER_ID}!` }));
+
+            // Start a specialized chatter loop for demo purposes
+            /*
+            const interval = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    sendMessage(ws, JSON.stringify({ type: 'system', message: `Keep-alive ping from ${SERVER_ID}` }));
+                } else {
+                    clearInterval(interval);
+                }
+            }, 5000 + Math.random() * 2000); // Random interval
+            */
         });
 
         ws.on('message', (data) => {
             try {
                 const msg = JSON.parse(data.toString());
-                if (msg.sender === SERVER_ID) return;
 
-                console.log(`[${SERVER_ID}] Received from ${msg.sender}. Forwarding...`);
+                // Ignore messages from self
+                if (msg.sender === SERVER_ID) {
+                    return;
+                }
+
+                console.log(`[${SERVER_ID}] Received from ${msg.sender}. Forwarding to local clients.`);
+
+                // Determine if it's a drawing message or other
+                // The content is a stringified JSON usually, or plain text
+                // We transmit the raw content string to the browser
+                // The browser will parse it.
+
                 wss.clients.forEach(client => {
                     if (client.readyState === WebSocket.OPEN) {
                         client.send(msg.content);
                     }
                 });
+
             } catch (e) {
-                console.log(`[${SERVER_ID}] Received raw/system: ${data}`);
+                console.log(`[${SERVER_ID}] Received non-JSON or system message: ${data}`);
             }
         });
 
         ws.on('close', (code, reason) => {
             console.log(`[${SERVER_ID}] WebSocket Closed. Code: ${code}, Reason: '${reason}'`);
+            console.log(`[${SERVER_ID}] WebSocket Closed. Code: ${code}, Reason: '${reason}'`);
             wsClientStatus = 'disconnected';
-            promptForKey();
+            console.log(`[${SERVER_ID}] Disconnected. Reconnect via Web Interface.`);
         });
 
         ws.on('error', (err) => {
@@ -129,13 +164,15 @@ async function connectToCentral(key) {
             if (err.message.includes('401')) {
                 console.error(`[${SERVER_ID}] ERROR: Dispatch returned 401. Check if your Session Key is correct.`);
             }
+            // ws.close() will trigger the close handler, which prompts for key
         });
 
     } catch (err) {
         console.error(`[${SERVER_ID}] Connect Logic Exception:`, err);
-        wsClientStatus = 'disconnected';
+        // Only prompt via CLI if this was a CLI flow or general failure, 
+        // but for now it's fine to just log.
         console.log(`[${SERVER_ID}] Please retry via CLI or Web Interface.`);
-        promptForKey();
+
     }
 }
 
