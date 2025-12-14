@@ -28,7 +28,8 @@ let activeTool = 'pencil'; // 'pencil' or 'eraser'
 const canvas = document.getElementById('canvas');
 const clearBtn = document.getElementById('clearBtn');
 const saveBtn = document.getElementById('saveBtn');
-const transmitBtn = document.getElementById('transmitBtn');
+const transmitToggle = document.getElementById('transmitToggle');
+let isLive = true;
 
 // Toolbar Elements
 const sizeSlider = document.getElementById('sizeSlider');
@@ -62,12 +63,52 @@ ws.onmessage = (event) => {
     try {
         const data = JSON.parse(event.data);
         if (data.type === 'drawing_update' && Array.isArray(data.paths)) {
-            // Append new paths
-            data.paths.forEach(p => paths.push(p));
-            lastTransmittedIndex += data.paths.length;
-            renderPaths();
-            updateButtons();
-            if (showSVG && svgOutput) updateSVGOutput();
+            // Determine target frame (default to 0 if missing, for backward compatibility)
+            const targetFrameIndex = (typeof data.frameIndex === 'number') ? data.frameIndex : 0;
+
+            // Validate index range
+            if (targetFrameIndex >= 0 && targetFrameIndex < MAX_FRAMES) {
+                // Append paths to the correct frame
+                data.paths.forEach(p => frames[targetFrameIndex].push(p));
+
+                // If we are currently viewing this frame, re-render immediately
+                if (targetFrameIndex === currentFrameIndex) {
+                    // Update tracking if we are on the same frame? 
+                    // Actually lastTransmittedIndex tracks OUR sending. 
+                    // Incoming paths don't change what we need to send, 
+                    // but they DO increase the total count.
+                    // If we blindly add, our 'lastTransmittedIndex' might get out of sync 
+                    // if it was simply "length of array".
+                    // But 'transmitDrawing' slices from 'lastTransmittedIndex'.
+                    // If we just added incoming paths to the end, 'transmitDrawing' would 
+                    // think these match new local paths and try to send them back?
+                    // NO. 'lastTransmittedIndex' is updated to 'paths.length' AFTER send.
+                    // If we receive paths, 'paths.length' increases.
+                    // If we draw again, we slice from OLD 'lastTransmittedIndex'. 
+                    // This includes the RECEIVED paths.
+                    // result: We ECHO back the paths we just got. This is bad.
+
+                    // FIX: When receiving paths, we must assume they are "synced" 
+                    // and bump 'lastTransmittedIndex' locally so we don't re-transmit them.
+                    lastTransmittedIndex += data.paths.length;
+
+                    renderPaths();
+                    updateButtons();
+                    if (showSVG && svgOutput) updateSVGOutput();
+                } else {
+                    // If we received data for a different frame, maybe show a visual indicator?
+                    // For now, just store it.
+                    // Note: We do NOT update 'lastTransmittedIndex' for the currently hidden frame 
+                    // because 'lastTransmittedIndex' is a global variable currently tracking the active frame only?
+                    // WAIT. 'lastTransmittedIndex' is global in this file.
+                    // In 'switchFrame', we reset `lastTransmittedIndex = frames[currentFrameIndex].length;`
+                    // So if we receive data for a HIDDEN frame, we just push it.
+                    // When the user eventually switches to that frame, 'switchFrame' will run:
+                    // `lastTransmittedIndex = frames[newIndex].length`
+                    // This sets it to the full length (including these received paths).
+                    // So we won't re-transmit them. This works perfectly!
+                }
+            }
         }
     } catch (e) {
         // console.log('Received non-drawing message', event.data);
@@ -230,7 +271,6 @@ function updateButtons() {
     const hasContent = paths.length > 0;
     if (exportBtn.style) exportBtn.disabled = !hasContent;
     if (copyBtn.style) copyBtn.disabled = !hasContent;
-    transmitBtn.disabled = paths.length === lastTransmittedIndex;
 }
 
 function startDrawing(e) {
@@ -264,6 +304,11 @@ function stopDrawing() {
 
         updateButtons();
         if (showSVG) updateSVGOutput();
+
+        // Auto-transmit the new stroke if Live mode is on
+        if (isLive) {
+            transmitDrawing();
+        }
     }
     isDrawing = false;
     currentPath = [];
@@ -284,15 +329,16 @@ function transmitDrawing() {
         const newPaths = paths.slice(lastTransmittedIndex);
         const message = {
             type: 'drawing_update',
+            frameIndex: currentFrameIndex,
             paths: newPaths
         };
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(message));
             lastTransmittedIndex = paths.length;
             updateButtons();
-            alert('Broadcasting ' + newPaths.length + ' new path(s)...');
+            console.log('Broadcasting ' + newPaths.length + ' new path(s)...');
         } else {
-            alert('WebSocket not connected.');
+            console.log('WebSocket not connected, cannot transmit.');
         }
     }
 }
@@ -509,10 +555,16 @@ canvas.addEventListener('mouseleave', stopDrawing);
 // Action Buttons
 if (clearBtn) clearBtn.addEventListener('click', clearDrawing);
 if (saveBtn) saveBtn.addEventListener('click', exportSVG);
-// Legacy
-if (exportBtn.addEventListener) exportBtn.addEventListener('click', exportSVG);
+if (transmitToggle) {
+    transmitToggle.addEventListener('change', (e) => {
+        isLive = e.target.checked;
+        // If switched to Live, send any pending updates immediately
+        if (isLive) {
+            transmitDrawing();
+        }
+    });
+}
 if (copyBtn.addEventListener) copyBtn.addEventListener('click', copySVGCode);
-if (transmitBtn) transmitBtn.addEventListener('click', transmitDrawing);
 if (toggleBtn.addEventListener) toggleBtn.addEventListener('click', toggleSVGDisplay);
 
 // Frame Logic
