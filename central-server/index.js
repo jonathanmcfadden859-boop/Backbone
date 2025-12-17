@@ -31,6 +31,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json()); // Ensure JSON body parsing
 
 // API Routes
+app.get('/ping', (req, res) => {
+    res.json({
+        message: 'pong'
+    });
+});
+
+// API Routes
 app.get('/api/status', (req, res) => {
     res.json({
         sessionKey,
@@ -91,7 +98,7 @@ app.post('/api/regenerate', (req, res) => {
 
     // Optional: Clear history on key regeneration? 
     // Usually a new session means a clean slate.
-    globalFrames = Array(MAX_FRAMES).fill().map(() => []);
+    globalFrames = Array(sessionSettings.maxFrames).fill().map(() => []);
 
     res.json({ success: true, sessionKey });
 });

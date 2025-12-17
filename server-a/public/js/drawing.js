@@ -55,14 +55,79 @@ const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
 const wsUrl = `${protocol}//${window.location.host}`;
 const ws = new WebSocket(wsUrl);
 
+let localConnected = false;
+let centralConnected = false;
+
 ws.onopen = () => {
     console.log('Connected to server WebSocket');
+    localConnected = true;
+    updateConnectionStatus();
 };
 
+// Safety check for browsers that might have opened the socket before the event handler hung
+if (ws.readyState === WebSocket.OPEN) {
+    localConnected = true;
+    updateConnectionStatus();
+}
+
+ws.onclose = () => {
+    console.log('Disconnected from server WebSocket');
+    localConnected = false;
+    // If local is gone, effectively central is gone for us too
+    updateConnectionStatus();
+};
+
+ws.onerror = (err) => {
+    console.error('WebSocket error:', err);
+    localConnected = false;
+    updateConnectionStatus();
+};
+
+const connectionBadge = document.getElementById('connectionBadge');
+const connectionInfo = document.getElementById('connectionInfo');
+
+function updateConnectionStatus() {
+    if (!connectionBadge || !connectionInfo) return;
+
+    if (!localConnected) {
+        // Not connected to Node server at all
+        connectionBadge.textContent = 'Offline';
+        connectionBadge.className = 'status-badge offline';
+        connectionInfo.textContent = 'Disconnected from Local Node';
+        connectionInfo.style.color = '#ef4444';
+        return;
+    }
+
+    // Connected to Node server, check Central
+    if (centralConnected) {
+        connectionBadge.textContent = 'Online';
+        connectionBadge.className = 'status-badge online';
+        connectionInfo.textContent = `Live Session Active (${wsUrl})`;
+        connectionInfo.style.color = '#e8eaed';
+    } else {
+        // Connected to Node, but Node is offline from Central
+        connectionBadge.textContent = 'Standby';
+        connectionBadge.className = 'status-badge offline'; // Or maybe a new 'warning' class? User asked for "not connected" indication.
+        // Let's keep it red/offline or maybe orange. User said "A,B,C should show that they are not connected".
+        connectionInfo.textContent = 'Connected to Node, but No Central Session';
+        connectionInfo.style.color = 'orange';
+    }
+}
+
 ws.onmessage = (event) => {
+    // If we receive a message, we are definitely connected locally
+    if (!localConnected) {
+        localConnected = true;
+        updateConnectionStatus();
+    }
+
     try {
         const data = JSON.parse(event.data);
-        if (data.type === 'drawing_update' && Array.isArray(data.paths)) {
+
+        if (data.type === 'central_status') {
+            centralConnected = (data.status === 'connected');
+            updateConnectionStatus();
+        } else if (data.type === 'drawing_update' && Array.isArray(data.paths)) {
             // Determine target frame (default to 0 if missing, for backward compatibility)
             const targetFrameIndex = (typeof data.frameIndex === 'number') ? data.frameIndex : 0;
 

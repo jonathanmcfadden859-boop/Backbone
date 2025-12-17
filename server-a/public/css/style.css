@@ -423,6 +423,11 @@ body {
     color: white;
 }
 
+.status-badge.online {
+    background-color: #22c55e;
+    color: white;
+}
+
 .flex-grow {
     flex: 1;
     text-align: right;

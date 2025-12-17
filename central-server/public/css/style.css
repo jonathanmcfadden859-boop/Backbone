@@ -30,7 +30,18 @@ h1 {
     border-radius: 6px;
     margin: 1.5rem 0;
     word-break: break-all;
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
 }
+
+.key-display:hover {
+    background-color: #e0e0e0;
+}
+
+.key-display:active {
+    background-color: #d0d0d0;
+}
+
 
 button {
     background: #0070f3;

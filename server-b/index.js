@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import 'dotenv/config';
 
 
@@ -16,6 +17,25 @@ const app = express();
 const CENTRAL_URL = process.env.CENTRAL_SERVER_URL || 'ws://localhost:8090';
 
 app.use(express.json());
+
+const BUILD_ID = Date.now();
+
+// Serve root manually to inject cache busters
+app.get('/', (req, res) => {
+    const indexPath = path.join(__dirname, 'public', 'index.html');
+    fs.readFile(indexPath, 'utf8', (err, data) => {
+        if (err) {
+            console.error('Error reading index.html:', err);
+            return res.status(500).send('Internal Server Error');
+        }
+        // Inject cache buster params
+        const result = data
+            .replace('src="js/drawing.js"', `src="js/drawing.js?v=${BUILD_ID}"`)
+            .replace('href="css/style.css"', `href="css/style.css?v=${BUILD_ID}"`);
+
+        res.send(result);
+    });
+});
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
@@ -51,6 +71,12 @@ const wss = new WebSocketServer({ server });
 
 wss.on('connection', (ws) => {
     console.log(`[${SERVER_ID}] Local browser client connected.`);
+
+    // Send current status immediately
+    ws.send(JSON.stringify({
+        type: 'central_status',
+        status: wsClientStatus
+    }));
 
     ws.on('message', (message) => {
         try {
@@ -109,6 +135,7 @@ async function connectToCentral(key) {
         ws.on('open', () => {
             console.log(`[${SERVER_ID}] WebSocket Open: Connected to Central Hub successfully!`);
             wsClientStatus = 'connected';
+            broadcastStatus('connected');
 
             // Send a hello message
             sendMessage(ws, JSON.stringify({ type: 'system', message: `Hello from ${SERVER_ID}!` }));
@@ -134,16 +161,23 @@ async function connectToCentral(key) {
                     return;
                 }
 
-                console.log(`[${SERVER_ID}] Received from ${msg.sender}. Forwarding to local clients.`);
+                console.log(`[${SERVER_ID}] Received from ${msg.sender || 'Central'}. Forwarding to local clients.`);
 
                 // Determine if it's a drawing message or other
-                // The content is a stringified JSON usually, or plain text
-                // We transmit the raw content string to the browser
-                // The browser will parse it.
+                // The content is a wrapped JSON string from other clients, 
+                // OR a direct JSON object from Central (settings_update, history).
+
+                let payloadToSend;
+                if (msg.content) {
+                    payloadToSend = msg.content;
+                } else {
+                    // Direct system message (settings_update, history snapshot)
+                    payloadToSend = data.toString();
+                }
 
                 wss.clients.forEach(client => {
                     if (client.readyState === WebSocket.OPEN) {
-                        client.send(msg.content);
+                        client.send(payloadToSend);
                     }
                 });
 
@@ -154,9 +188,9 @@ async function connectToCentral(key) {
 
         ws.on('close', (code, reason) => {
             console.log(`[${SERVER_ID}] WebSocket Closed. Code: ${code}, Reason: '${reason}'`);
-            console.log(`[${SERVER_ID}] WebSocket Closed. Code: ${code}, Reason: '${reason}'`);
             wsClientStatus = 'disconnected';
             console.log(`[${SERVER_ID}] Disconnected. Reconnect via Web Interface.`);
+            broadcastStatus('disconnected');
         });
 
         ws.on('error', (err) => {
@@ -185,4 +219,16 @@ function sendMessage(ws, text) {
         });
         ws.send(payload);
     }
+}
+
+function broadcastStatus(status) {
+    const msg = JSON.stringify({
+        type: 'central_status',
+        status: status
+    });
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(msg);
+        }
+    });
 }
