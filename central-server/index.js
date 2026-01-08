@@ -177,6 +177,12 @@ wss.on('connection', function connection(ws) {
                 if (fIndex >= 0 && fIndex < sessionSettings.maxFrames) {
                     innerMsg.p.forEach(p => globalFrames[fIndex].push(p));
                 }
+            } else if (innerMsg.t === 'clear') {
+                const fIndex = (typeof innerMsg.i === 'number') ? innerMsg.i : 0;
+                if (fIndex >= 0 && fIndex < sessionSettings.maxFrames) {
+                    console.log(`[Central] Clearing frame ${fIndex} content.`);
+                    globalFrames[fIndex] = [];
+                }
             }
         } catch (e) {
             // Non-JSON or unsupported format

@@ -59,6 +59,7 @@ const ws = new WebSocket(wsUrl);
 
 let localConnected = false;
 let centralConnected = false;
+let centralUrl = '';
 
 ws.onopen = () => {
     console.log('Connected to server WebSocket');
@@ -98,10 +99,11 @@ function updateConnectionStatus() {
         return;
     }
 
+    // Connected to Node server, check Central
     if (centralConnected) {
         connectionBadge.textContent = 'Online';
         connectionBadge.className = 'status-badge online';
-        connectionInfo.textContent = `Live Session Active (${wsUrl})`;
+        connectionInfo.textContent = `Live Session Active (${centralUrl || 'Connecting...'})`;
         connectionInfo.style.color = '#e8eaed';
     } else {
         connectionBadge.textContent = 'Standby';
@@ -119,6 +121,7 @@ ws.onmessage = (event) => {
 
         if (type === 'c' || type === 'central_status') {
             const status = data.s || data.status;
+            centralUrl = data.url || centralUrl;
             centralConnected = (status === 'connected');
             updateConnectionStatus();
         } else if (type === 'h' || type === 'history_snapshot') {
@@ -145,6 +148,18 @@ ws.onmessage = (event) => {
                         const el = createPathElement(pathData);
                         canvas.appendChild(el);
                     });
+                    updateButtons();
+                    if (showSVG && svgOutput) updateSVGOutput();
+                }
+            }
+        } else if (type === 'clear') {
+            const targetFrameIndex = (typeof data.i === 'number') ? data.i : (typeof data.frameIndex === 'number' ? data.frameIndex : 0);
+            if (targetFrameIndex >= 0 && targetFrameIndex < MAX_FRAMES) {
+                console.log(`Received clear command for frame ${targetFrameIndex}`);
+                frames[targetFrameIndex] = [];
+                if (targetFrameIndex === currentFrameIndex) {
+                    lastTransmittedIndex = 0;
+                    renderPaths();
                     updateButtons();
                     if (showSVG && svgOutput) updateSVGOutput();
                 }
@@ -461,12 +476,19 @@ function stopDrawing() {
 }
 
 function clearDrawing() {
-    paths = [];
+    frames[currentFrameIndex] = [];
     currentPath = [];
     lastTransmittedIndex = 0;
     renderPaths();
     updateButtons();
     if (showSVG) updateSVGOutput();
+
+    if (isLive && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            t: 'clear',
+            i: currentFrameIndex
+        }));
+    }
 }
 
 function transmitDrawing() {

@@ -15,10 +15,13 @@ const port = 8081;
 const SERVER_ID = 'SERVER_B';
 const app = express();
 const CENTRAL_URL = (process.env.CENTRAL_SERVER_URL || 'ws://localhost:8090').replace(/\/$/, '');
+const KEEP_ALIVE_MINS = parseInt(process.env.KEEP_ALIVE || '0');
 
 // State Cache for local clients
 let lastSessionSettings = null;
 let lastHistorySnapshot = null;
+let lastUsedKey = null;
+let heartbeatInterval = null;
 
 app.use(express.json());
 
@@ -86,7 +89,8 @@ wss.on('connection', (ws) => {
 
     ws.send(JSON.stringify({
         type: 'central_status',
-        status: wsClientStatus
+        status: wsClientStatus,
+        url: CENTRAL_URL
     }));
 
     ws.on('message', (message) => {
@@ -147,20 +151,23 @@ async function connectToCentral(key) {
             console.log(`[${SERVER_ID}] WebSocket Open: Connected to Central Hub successfully!`);
             wsClientStatus = 'connected';
             broadcastStatus('connected');
+            lastUsedKey = key;
 
             // Send a hello message
             sendMessage(ws, JSON.stringify({ type: 'system', message: `Hello from ${SERVER_ID}!` }));
 
-            // Start a specialized chatter loop for demo purposes
-            /*
-            const interval = setInterval(() => {
+            // Implement KEEP_ALIVE: Send a heartbeat every 30 seconds
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(() => {
                 if (ws.readyState === WebSocket.OPEN) {
-                    sendMessage(ws, JSON.stringify({ type: 'system', message: `Keep-alive ping from ${SERVER_ID}` }));
-                } else {
-                    clearInterval(interval);
+                    // Send a small compact ping
+                    ws.send(JSON.stringify({ t: 'p', sender: SERVER_ID, ts: Date.now() }));
                 }
-            }, 5000 + Math.random() * 2000); // Random interval
-            */
+            }, 30000); // 30 seconds
+
+            if (KEEP_ALIVE_MINS > 0) {
+                console.log(`[${SERVER_ID}] Keep-alive active. Maintaining connection for ${KEEP_ALIVE_MINS} minutes.`);
+            }
         });
 
         ws.on('message', (data) => {
@@ -194,10 +201,18 @@ async function connectToCentral(key) {
         });
 
         ws.on('close', (code, reason) => {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
             console.log(`[${SERVER_ID}] WebSocket Closed. Code: ${code}, Reason: '${reason}'`);
             wsClientStatus = 'disconnected';
-            console.log(`[${SERVER_ID}] Disconnected. Reconnect via Web Interface.`);
             broadcastStatus('disconnected');
+
+            // Auto-reconnect logic if we have a key
+            if (lastUsedKey) {
+                console.log(`[${SERVER_ID}] Connection lost. Attempting auto-reconnect in 5 seconds...`);
+                setTimeout(() => connectToCentral(lastUsedKey), 5000);
+            } else {
+                console.log(`[${SERVER_ID}] Disconnected. Reconnect via Web Interface.`);
+            }
         });
 
         ws.on('error', (err) => {
@@ -233,8 +248,9 @@ function sendMessage(ws, text) {
 
 function broadcastStatus(status) {
     const msg = JSON.stringify({
-        type: 'central_status',
-        status: status
+        t: 'c', // compact
+        status: status,
+        url: CENTRAL_URL
     });
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
