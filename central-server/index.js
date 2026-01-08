@@ -76,8 +76,8 @@ app.post('/api/settings', (req, res) => {
 
     // Broadcast new settings to all clients
     const msg = JSON.stringify({
-        type: 'settings_update',
-        settings: sessionSettings
+        t: 's', // type: settings_update
+        s: sessionSettings // settings
     });
 
     connections.forEach(ws => {
@@ -131,8 +131,8 @@ wss.on('connection', function connection(ws) {
 
     // Send Current Settings
     ws.send(JSON.stringify({
-        type: 'settings_update',
-        settings: sessionSettings
+        t: 's', // type: settings_update
+        s: sessionSettings
     }));
 
     // Send Initial Snapshot of History
@@ -142,48 +142,44 @@ wss.on('connection', function connection(ws) {
     // Or we could implement a 'snapshot' type if we updated the client.
     // Let's stick to 'drawing_update' compatibility to start.
 
+    // Send Initial Snapshot of History
     console.log('[Central] Sending history snapshot to new client...');
-    let totalPathsSent = 0;
-
-    globalFrames.forEach((paths, index) => {
-        if (paths.length > 0) {
-            const msg = {
-                type: 'drawing_update',
-                frameIndex: index,
-                paths: paths,
-                sender: 'CENTRAL_HISTORY'
-            };
-            ws.send(JSON.stringify(msg));
-            totalPathsSent += paths.length;
-        }
-    });
-    console.log(`[Central] Snapshot sent (${totalPathsSent} paths).`);
+    ws.send(JSON.stringify({
+        t: 'h', // type: history_snapshot
+        f: globalFrames // frames
+    }));
+    console.log(`[Central] Snapshot sent.`);
 
 
     ws.on('error', console.error);
 
     ws.on('message', function message(data, isBinary) {
-        // Broadcast to all other clients
         const msgString = isBinary ? data : data.toString();
-        // console.log(`[Central] Broadcasting: ${msgString.substring(0, 50)}...`);
 
-        // Parse and Store History
         try {
             const parsed = JSON.parse(msgString);
-            if (parsed.type === 'drawing_update' && Array.isArray(parsed.paths)) {
-                // Default to frame 0 if not specified
-                const fIndex = (typeof parsed.frameIndex === 'number') ? parsed.frameIndex : 0;
+
+            // Nodes wrap their messages in { sender, content, timestamp }
+            // We need to unwrap the 'content' to get the actual drawing update
+            let innerMsg = parsed;
+            if (parsed.content) {
+                try {
+                    innerMsg = JSON.parse(parsed.content);
+                } catch (e) {
+                    // content isn't JSON, skip unwrapping
+                }
+            }
+
+            // 'u' is drawing_update, 'p' is paths, 'i' is frameIndex
+            if (innerMsg.t === 'u' && Array.isArray(innerMsg.p)) {
+                const fIndex = (typeof innerMsg.i === 'number') ? innerMsg.i : 0;
 
                 if (fIndex >= 0 && fIndex < sessionSettings.maxFrames) {
-                    parsed.paths.forEach(p => globalFrames[fIndex].push(p));
+                    innerMsg.p.forEach(p => globalFrames[fIndex].push(p));
                 }
-            } else if (parsed.type === 'clear_frame') {
-                // Future feature: handle clear
-                // const fIndex = parsed.frameIndex;
-                // globalFrames[fIndex] = [];
             }
         } catch (e) {
-            // Non-JSON message, or system message we don't store
+            // Non-JSON or unsupported format
         }
 
         connections.forEach(client => {

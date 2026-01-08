@@ -16,6 +16,10 @@ const SERVER_ID = 'SERVER_C';
 const app = express();
 const CENTRAL_URL = (process.env.CENTRAL_SERVER_URL || 'ws://localhost:8090').replace(/\/$/, '');
 
+// State Cache for local clients
+let lastSessionSettings = null;
+let lastHistorySnapshot = null;
+
 app.use(express.json());
 
 const BUILD_ID = Date.now();
@@ -73,6 +77,13 @@ wss.on('connection', (ws) => {
     console.log(`[${SERVER_ID}] Local browser client connected.`);
 
     // Send current status immediately
+    if (lastSessionSettings) {
+        ws.send(lastSessionSettings);
+    }
+    if (lastHistorySnapshot) {
+        ws.send(lastHistorySnapshot);
+    }
+
     ws.send(JSON.stringify({
         type: 'central_status',
         status: wsClientStatus
@@ -153,27 +164,26 @@ async function connectToCentral(key) {
         });
 
         ws.on('message', (data) => {
+            const rawData = data.toString();
             try {
-                const msg = JSON.parse(data.toString());
+                const msg = JSON.parse(rawData);
+
+                // Cache critical state from Central
+                if (msg.t === 's' || msg.type === 'settings_update') {
+                    lastSessionSettings = rawData;
+                } else if (msg.t === 'h' || msg.type === 'history_snapshot') {
+                    lastHistorySnapshot = rawData;
+                }
 
                 // Ignore messages from self
-                if (msg.sender === SERVER_ID) {
-                    return;
-                }
+                if (msg.sender === SERVER_ID) return;
 
                 console.log(`[${SERVER_ID}] Received from ${msg.sender || 'Central'}. Forwarding to local clients.`);
 
                 // Determine if it's a drawing message or other
                 // The content is a wrapped JSON string from other clients, 
                 // OR a direct JSON object from Central (settings_update, history).
-
-                let payloadToSend;
-                if (msg.content) {
-                    payloadToSend = msg.content;
-                } else {
-                    // Direct system message (settings_update, history snapshot)
-                    payloadToSend = data.toString();
-                }
+                let payloadToSend = msg.content || rawData;
 
                 wss.clients.forEach(client => {
                     if (client.readyState === WebSocket.OPEN) {
@@ -182,7 +192,8 @@ async function connectToCentral(key) {
                 });
 
             } catch (e) {
-                console.log(`[${SERVER_ID}] Received non-JSON or system message: ${data}`);
+                // Non-JSON or unsupported format, just log if needed, but don't crash
+                // console.log(`[${SERVER_ID}] Received non-JSON or system message: ${data}`);
             }
         });
 

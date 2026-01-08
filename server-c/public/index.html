@@ -26,8 +26,10 @@
         <section class="toolbar">
             <!-- Left: Tools -->
             <div class="tool-group">
-                <button class="tool-btn active" title="Pencil"><i class="ph ph-pencil-simple"></i></button>
-                <button class="tool-btn" title="Eraser"><i class="ph ph-eraser"></i></button>
+                <button class="tool-btn active" title="Pencil" id="pencilTool"><i
+                        class="ph ph-pencil-simple"></i></button>
+                <button class="tool-btn" title="Square" id="squareTool"><i class="ph ph-square"></i></button>
+                <button class="tool-btn" title="Circle" id="circleTool"><i class="ph ph-circle"></i></button>
             </div>
 
             <div class="separator"></div>
@@ -48,17 +50,21 @@
 
             <div class="separator"></div>
 
-            <!-- Actions -->
+            <!-- Save Button -->
             <div class="action-group">
-                <button id="clearBtn" class="tool-btn danger" title="Clear Canvas"><i class="ph ph-trash"></i></button>
                 <button id="saveBtn" class="tool-btn" title="Save"><i class="ph ph-floppy-disk"></i></button>
             </div>
-            <!-- Right: Colors -->
+
+            <!-- Color Palette -->
             <div class="color-picker">
                 <div class="color-swatch active primary-swatch" style="background-color: #000000;"></div>
-                <div class="color-swatch secondary-swatch" style="background-color: #ffffff;"></div>
                 <div class="color-gradient" title="Spectrum"></div>
                 <div class="color-gradient-gray" title="Grayscale"></div>
+            </div>
+
+            <!-- Trash Button -->
+            <div class="action-group">
+                <button id="clearBtn" class="tool-btn danger" title="Clear Canvas"><i class="ph ph-trash"></i></button>
             </div>
 
             <div class="spacer"></div>
@@ -126,9 +132,9 @@
 
         <!-- Bottom Status Bar -->
         <div class="status-bar">
-            <span class="status-badge offline">Offline</span>
+            <span id="connectionBadge" class="status-badge offline">Offline</span>
+            <span id="connectionInfo" class="status-item"></span>
             <span class="status-item">Ready</span>
-            <span class="status-item status-item-tool">Tool: Pencil</span>
             <span class="status-item flex-grow">You are currently drawing with participants from: Unknown</span>
         </div>
     </div>

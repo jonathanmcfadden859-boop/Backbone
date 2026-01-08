@@ -12,6 +12,8 @@ let FPS = 8;
 let frameDuration = 1000 / FPS;
 
 let currentPath = [];
+let startX = 0;
+let startY = 0;
 let isDrawing = false;
 let showSVG = false;
 let lastTransmittedIndex = 0; // Note: this logic might need update for multi-frame sync later
@@ -115,68 +117,47 @@ function updateConnectionStatus() {
 }
 
 ws.onmessage = (event) => {
-    // If we receive a message, we are definitely connected locally
-    if (!localConnected) {
-        localConnected = true;
-        updateConnectionStatus();
-    }
-
     try {
         const data = JSON.parse(event.data);
+        // Compact keys: t=type, c=central_status, h=history_snapshot, u=drawing_update, s=settings_update
+        const type = data.t || data.type;
 
-        if (data.type === 'central_status') {
-            centralConnected = (data.status === 'connected');
+        if (type === 'c' || type === 'central_status') {
+            const status = data.s || data.status;
+            centralConnected = (status === 'connected');
             updateConnectionStatus();
-        } else if (data.type === 'drawing_update' && Array.isArray(data.paths)) {
-            // Determine target frame (default to 0 if missing, for backward compatibility)
-            const targetFrameIndex = (typeof data.frameIndex === 'number') ? data.frameIndex : 0;
+        } else if (type === 'h' || type === 'history_snapshot') {
+            const snapshotFrames = data.f || data.frames;
+            if (Array.isArray(snapshotFrames)) {
+                console.log('Received history snapshot. Syncing frames.');
+                frames = snapshotFrames.slice(0, MAX_FRAMES);
+                if (frames[currentFrameIndex]) {
+                    lastTransmittedIndex = frames[currentFrameIndex].length;
+                }
+                renderPaths();
+                initFrameButtons();
+            }
+        } else if (type === 'u' || type === 'drawing_update') {
+            const incomingPaths = data.p || data.paths;
+            const targetFrameIndex = (typeof data.i === 'number') ? data.i : (typeof data.frameIndex === 'number' ? data.frameIndex : 0);
 
-            // Validate index range
-            if (targetFrameIndex >= 0 && targetFrameIndex < MAX_FRAMES) {
-                // Append paths to the correct frame
-                data.paths.forEach(p => frames[targetFrameIndex].push(p));
+            if (incomingPaths && targetFrameIndex >= 0 && targetFrameIndex < MAX_FRAMES) {
+                incomingPaths.forEach(p => frames[targetFrameIndex].push(p));
 
-                // If we are currently viewing this frame, re-render immediately
                 if (targetFrameIndex === currentFrameIndex) {
-                    // Update tracking if we are on the same frame? 
-                    // Actually lastTransmittedIndex tracks OUR sending. 
-                    // Incoming paths don't change what we need to send, 
-                    // but they DO increase the total count.
-                    // If we blindly add, our 'lastTransmittedIndex' might get out of sync 
-                    // if it was simply "length of array".
-                    // But 'transmitDrawing' slices from 'lastTransmittedIndex'.
-                    // If we just added incoming paths to the end, 'transmitDrawing' would 
-                    // think these match new local paths and try to send them back?
-                    // NO. 'lastTransmittedIndex' is updated to 'paths.length' AFTER send.
-                    // If we receive paths, 'paths.length' increases.
-                    // If we draw again, we slice from OLD 'lastTransmittedIndex'. 
-                    // This includes the RECEIVED paths.
-                    // result: We ECHO back the paths we just got. This is bad.
-
-                    // FIX: When receiving paths, we must assume they are "synced" 
-                    // and bump 'lastTransmittedIndex' locally so we don't re-transmit them.
-                    lastTransmittedIndex += data.paths.length;
-
-                    renderPaths();
+                    lastTransmittedIndex += incomingPaths.length;
+                    incomingPaths.forEach(pathData => {
+                        const el = createPathElement(pathData);
+                        canvas.appendChild(el);
+                    });
                     updateButtons();
                     if (showSVG && svgOutput) updateSVGOutput();
-                } else {
-                    // If we received data for a different frame, maybe show a visual indicator?
-                    // For now, just store it.
-                    // Note: We do NOT update 'lastTransmittedIndex' for the currently hidden frame 
-                    // because 'lastTransmittedIndex' is a global variable currently tracking the active frame only?
-                    // WAIT. 'lastTransmittedIndex' is global in this file.
-                    // In 'switchFrame', we reset `lastTransmittedIndex = frames[currentFrameIndex].length;`
-                    // So if we receive data for a HIDDEN frame, we just push it.
-                    // When the user eventually switches to that frame, 'switchFrame' will run:
-                    // `lastTransmittedIndex = frames[newIndex].length`
-                    // This sets it to the full length (including these received paths).
-                    // So we won't re-transmit them. This works perfectly!
                 }
             }
-        } else if (data.type === 'settings_update' && data.settings) {
-            console.log('Received session settings update:', data.settings);
-            applySessionSettings(data.settings);
+        } else if (type === 's' || type === 'settings_update') {
+            const settings = data.s || data.settings;
+            console.log('Received session settings update:', settings);
+            if (settings) applySessionSettings(settings);
         }
     } catch (e) {
         // console.log('Received non-drawing message', event.data);
@@ -289,9 +270,9 @@ function pointsToBezier(points) {
     if (points.length < 2) return '';
     const simplified = simplifyPoints(points, 3);
     if (simplified.length < 2) return '';
-    let path = `M ${simplified[0].x} ${simplified[0].y}`;
+    let path = `M ${simplified[0].x.toFixed(1)} ${simplified[0].y.toFixed(1)}`;
     if (simplified.length === 2) {
-        path += ` L ${simplified[1].x} ${simplified[1].y}`;
+        path += ` L ${simplified[1].x.toFixed(1)} ${simplified[1].y.toFixed(1)}`;
         return path;
     }
     for (let i = 1; i < simplified.length - 1; i++) {
@@ -303,19 +284,19 @@ function pointsToBezier(points) {
         const cp2x = p1.x + (p2.x - p1.x) * 0.5;
         const cp2y = p1.y + (p2.y - p1.y) * 0.5;
         if (i === 1) {
-            path += ` Q ${p1.x} ${p1.y} ${(p1.x + cp2x) / 2} ${(p1.y + cp2y) / 2}`;
+            path += ` Q ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} ${((p1.x + cp2x) / 2).toFixed(1)} ${((p1.y + cp2y) / 2).toFixed(1)}`;
         } else {
-            path += ` C ${cp1x} ${cp1y} ${p1.x} ${p1.y} ${(p1.x + cp2x) / 2} ${(p1.y + cp2y) / 2}`;
+            path += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} ${((p1.x + cp2x) / 2).toFixed(1)} ${((p1.y + cp2y) / 2).toFixed(1)}`;
         }
     }
     const lastPoint = simplified[simplified.length - 1];
     const secondLast = simplified[simplified.length - 2];
-    path += ` Q ${secondLast.x} ${secondLast.y} ${lastPoint.x} ${lastPoint.y}`;
+    path += ` Q ${secondLast.x.toFixed(1)} ${secondLast.y.toFixed(1)} ${lastPoint.x.toFixed(1)} ${lastPoint.y.toFixed(1)}`;
     return path;
 }
 
 // Create SVG path element
-// pathData can be a string (legacy) or an object { d, color, width, opacity }
+// pathData can be a string (legacy), an object, or a compact array [d, color, size, opacity]
 function createPathElement(pathData, isTemp = false) {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 
@@ -323,10 +304,17 @@ function createPathElement(pathData, isTemp = false) {
     let color = brushColor;
     let width = brushSize;
     let opacity = brushOpacity;
+    let fill = 'none';
 
-    if (typeof pathData === 'string') {
+    if (Array.isArray(pathData)) {
+        // [d, color, width, opacity, fill]
+        d = pathData[0];
+        color = pathData[1] || 'black';
+        width = pathData[2] || 2;
+        opacity = pathData[3] !== undefined ? pathData[3] : 1;
+        fill = pathData[4] || 'none';
+    } else if (typeof pathData === 'string') {
         d = pathData;
-        // Defaults for legacy paths
         color = 'black';
         width = 2;
         opacity = 1;
@@ -335,19 +323,22 @@ function createPathElement(pathData, isTemp = false) {
         color = pathData.color || 'black';
         width = pathData.width || 2;
         opacity = pathData.opacity !== undefined ? pathData.opacity : 1;
+        fill = pathData.fill || 'none';
     }
 
     if (isTemp) {
-        // Use current brush settings for temp path
         color = brushColor;
         width = brushSize;
         opacity = brushOpacity;
+        if (activeTool !== 'pencil') {
+            fill = brushColor;
+        }
     }
 
     path.setAttribute('d', d);
     path.setAttribute('stroke', color);
     path.setAttribute('stroke-width', width);
-    path.setAttribute('fill', 'none');
+    path.setAttribute('fill', fill);
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('stroke-linejoin', 'round');
     path.setAttribute('opacity', opacity);
@@ -390,7 +381,7 @@ function updateSVGOutput() {
     if (!pathList) return;
     pathList.innerHTML = '';
     paths.forEach((path, index) => {
-        const d = typeof path === 'string' ? path : path.d;
+        const d = Array.isArray(path) ? path[0] : (typeof path === 'string' ? path : path.d);
         const pathItem = document.createElement('div');
         pathItem.className = 'path-item';
         pathItem.innerHTML = `
@@ -410,9 +401,9 @@ function updateButtons() {
 function startDrawing(e) {
     isDrawing = true;
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    currentPath = [{ x, y }];
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+    currentPath = [{ x: startX, y: startY }];
 }
 
 function draw(e) {
@@ -420,33 +411,59 @@ function draw(e) {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    currentPath.push({ x, y });
-    renderPaths();
+
+    // Remove existing temporary path element
+    const tempPath = canvas.querySelector('.temp-path');
+    if (tempPath) canvas.removeChild(tempPath);
+
+    let d = '';
+    if (activeTool === 'pencil') {
+        currentPath.push({ x, y });
+        d = pointsToBezier(currentPath);
+    } else if (activeTool === 'square') {
+        const w = x - startX;
+        const h = y - startY;
+        d = `M ${startX.toFixed(1)} ${startY.toFixed(1)} L ${(startX + w).toFixed(1)} ${startY.toFixed(1)} L ${(startX + w).toFixed(1)} ${(startY + h).toFixed(1)} L ${startX.toFixed(1)} ${(startY + h).toFixed(1)} Z`;
+    } else if (activeTool === 'circle') {
+        const rx = Math.abs(x - startX) / 2;
+        const ry = Math.abs(y - startY) / 2;
+        const cx = (startX + x) / 2;
+        const cy = (startY + y) / 2;
+        d = `M ${cx.toFixed(1)} ${(cy - ry).toFixed(1)} A ${rx.toFixed(1)} ${ry.toFixed(1)} 0 1 0 ${cx.toFixed(1)} ${(cy + ry).toFixed(1)} A ${rx.toFixed(1)} ${ry.toFixed(1)} 0 1 0 ${cx.toFixed(1)} ${(cy - ry).toFixed(1)} Z`;
+    }
+
+    const el = createPathElement(d, true);
+    el.classList.add('temp-path');
+    canvas.appendChild(el);
 }
 
 function stopDrawing() {
-    if (isDrawing && currentPath.length > 1) {
-        const bezierPath = pointsToBezier(currentPath);
+    if (isDrawing) {
+        const tempPath = canvas.querySelector('.temp-path');
+        if (tempPath) {
+            const d = tempPath.getAttribute('d');
+            canvas.removeChild(tempPath);
 
-        // Save path with current style
-        paths.push({
-            d: bezierPath,
-            color: brushColor,
-            width: brushSize,
-            opacity: brushOpacity
-        });
+            const fill = activeTool === 'pencil' ? 'none' : brushColor;
 
-        updateButtons();
-        if (showSVG) updateSVGOutput();
+            const pathArray = [
+                d,
+                brushColor,
+                activeTool === 'pencil' ? brushSize : 1, // thin border for filled shapes
+                brushOpacity,
+                fill
+            ];
 
-        // Auto-transmit the new stroke if Live mode is on
-        if (isLive) {
-            transmitDrawing();
+            paths.push(pathArray);
+            canvas.appendChild(createPathElement(pathArray));
+
+            updateButtons();
+            if (showSVG) updateSVGOutput();
+            if (isLive) transmitDrawing();
         }
     }
     isDrawing = false;
     currentPath = [];
-    renderPaths();
 }
 
 function clearDrawing() {
@@ -462,9 +479,9 @@ function transmitDrawing() {
     if (paths.length > lastTransmittedIndex) {
         const newPaths = paths.slice(lastTransmittedIndex);
         const message = {
-            type: 'drawing_update',
-            frameIndex: currentFrameIndex,
-            paths: newPaths
+            t: 'u', // type: update
+            i: currentFrameIndex, // frameIndex
+            p: newPaths // paths
         };
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(message));
@@ -570,14 +587,16 @@ if (colorSwatches) {
 
             // Update State
             const styleColor = e.target.style.backgroundColor;
-            if (activeTool === 'pencil') {
-                brushColor = styleColor;
-                previousColor = styleColor;
-            } else {
-                // If erasing and user picks a color, switch back to pencil
+            brushColor = styleColor;
+            previousColor = styleColor;
+
+            // If we are currently using eraser (though removed from UI), 
+            // maybe we should switch back to the previous tool or just pencil?
+            // But if the user says "keep state", we keep it.
+            // However, seeing as 'eraser' uses a specific color (bg), 
+            // if they are in eraser mode and pick a color, they probably want to DRAW with it.
+            if (activeTool === 'eraser') {
                 activeTool = 'pencil';
-                brushColor = styleColor;
-                previousColor = styleColor;
                 updateToolButtons();
             }
         });
@@ -617,10 +636,13 @@ function pickColorFromGradient(e, isGrayscale) {
     }
 
     // Update Brush
-    activeTool = 'pencil'; // Switch to pencil when picking color
     brushColor = pickedColor;
     previousColor = pickedColor;
-    updateToolButtons();
+
+    if (activeTool === 'eraser') {
+        activeTool = 'pencil';
+        updateToolButtons();
+    }
 }
 
 if (colorGradient) {
@@ -642,34 +664,24 @@ function updateToolButtons() {
             btn.classList.remove('active');
         }
     });
-
-    const statusTool = document.querySelector('.status-item-tool');
-    if (statusTool) {
-        statusTool.textContent = `Tool: ${activeTool.charAt(0).toUpperCase() + activeTool.slice(1)}`;
-    }
 }
 
 if (toolBtns) {
     toolBtns.forEach(btn => {
         btn.addEventListener('click', (e) => {
             const title = btn.getAttribute('title').toLowerCase();
+            activeTool = title;
 
-            if (title === 'pencil') {
-                activeTool = 'pencil';
+            if (activeTool === 'pencil') {
                 brushColor = previousColor;
-                // If previous color was white (e.g. manually picked), might be confusing, but correct logic
-                if (brushColor === 'white' || brushColor === '#ffffff' || brushColor === 'rgb(255, 255, 255)') {
-                    // Maybe default to black if they switch to pencil and history was white? 
-                    // Let's leave it simple for now.
-                }
-            } else if (title === 'eraser') {
-                activeTool = 'eraser';
-                previousColor = brushColor; // Save current drawing color
-                // Simulate boolean subtract by painting with the canvas background color
-                // This is the standard performant way to "erase" in vector-over-raster engines 
-                // without expensive geometric boolean operations on Bezier curves.
+            } else if (activeTool === 'eraser') {
+                // Keep eraser logic if button exists, though it was removed from HTML
+                previousColor = brushColor;
                 const canvasBg = window.getComputedStyle(canvas).backgroundColor;
                 brushColor = canvasBg || '#ffffff';
+            } else {
+                // Shapes (Square, Circle)
+                brushColor = previousColor;
             }
 
             updateToolButtons();
