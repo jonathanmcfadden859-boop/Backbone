@@ -4,6 +4,12 @@
 
 This project demonstrates a star topology network where nodes (Server A, B, C) communicate via a Central Hub.
 
+## TODO
+
+*   Figure out SVG export
+*   Figure out session settings on connection issue
+*   Currently works 100% for Chrome browser only 
+
 ## Architecture
 
 *   **Central Server (Port 8090):**

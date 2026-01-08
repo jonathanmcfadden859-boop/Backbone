@@ -184,6 +184,7 @@ ws.onmessage = (event) => {
 };
 
 function applySessionSettings(settings) {
+    console.log('Applying session settings:', settings);
     // 1. Update Canvas Dimensions
     if (settings.width && settings.height) {
         canvas.setAttribute('width', settings.width);
@@ -237,6 +238,10 @@ function applySessionSettings(settings) {
             if (currentFrameIndex >= MAX_FRAMES) {
                 switchFrame(MAX_FRAMES - 1);
             }
+
+            // Update UI Labels
+            const totalDisplay = document.getElementById('totalFramesDisplay');
+            if (totalDisplay) totalDisplay.textContent = MAX_FRAMES;
 
             // Re-generate buttons
             initFrameButtons();

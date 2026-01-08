@@ -72,6 +72,7 @@ app.post('/api/settings', (req, res) => {
     }
 
     console.log('[Central] Session Settings Updated:', sessionSettings);
+    console.log(`[Central] Broadcasting to ${connections.size} connected nodes.`);
 
     // Broadcast new settings to all clients
     const msg = JSON.stringify({
@@ -173,7 +174,7 @@ wss.on('connection', function connection(ws) {
                 // Default to frame 0 if not specified
                 const fIndex = (typeof parsed.frameIndex === 'number') ? parsed.frameIndex : 0;
 
-                if (fIndex >= 0 && fIndex < MAX_FRAMES) {
+                if (fIndex >= 0 && fIndex < sessionSettings.maxFrames) {
                     parsed.paths.forEach(p => globalFrames[fIndex].push(p));
                 }
             } else if (parsed.type === 'clear_frame') {

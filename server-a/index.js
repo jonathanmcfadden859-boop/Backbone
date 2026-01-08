@@ -4,17 +4,17 @@ import { WebSocket, WebSocketServer } from 'ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import 'dotenv/config';
-
-
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+dotenv.config({ path: path.join(__dirname, '.env') });
+
 const port = 8080;
 const SERVER_ID = 'SERVER_A';
 const app = express();
-const CENTRAL_URL = process.env.CENTRAL_SERVER_URL || 'ws://localhost:8090';
+const CENTRAL_URL = (process.env.CENTRAL_SERVER_URL || 'ws://localhost:8090').replace(/\/$/, '');
 
 app.use(express.json());
 
@@ -126,7 +126,7 @@ async function connectToCentral(key) {
     }
 
     try {
-        const wsUrl = `${CENTRAL_URL}?key=${key}`;
+        const wsUrl = `${CENTRAL_URL}/?key=${key}`;
         console.log(`[${SERVER_ID}] Attempting WebSocket connection to: ${wsUrl}`);
 
         const ws = new WebSocket(wsUrl);
@@ -195,6 +195,9 @@ async function connectToCentral(key) {
 
         ws.on('error', (err) => {
             console.error(`[${SERVER_ID}] WebSocket Error details:`, err);
+            if (err.message.includes('301')) {
+                console.error(`[${SERVER_ID}] ERROR: Received 301 Redirect. This usually means you should use 'wss://' instead of 'ws://' in your .env file, or check your trailing slashes.`);
+            }
             if (err.message.includes('401')) {
                 console.error(`[${SERVER_ID}] ERROR: Dispatch returned 401. Check if your Session Key is correct.`);
             }

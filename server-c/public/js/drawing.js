@@ -173,6 +173,10 @@ function applySessionSettings(settings) {
                 switchFrame(MAX_FRAMES - 1);
             }
 
+            // Update UI Labels
+            const totalDisplay = document.getElementById('totalFramesDisplay');
+            if (totalDisplay) totalDisplay.textContent = MAX_FRAMES;
+
             // Re-generate buttons
             initFrameButtons();
         }
