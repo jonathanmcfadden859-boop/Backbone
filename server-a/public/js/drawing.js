@@ -149,7 +149,7 @@ ws.onmessage = (event) => {
                 if (targetFrameIndex === currentFrameIndex) {
                     lastTransmittedIndex += incomingPaths.length;
                     incomingPaths.forEach(pathData => {
-                        const el = createPathElement(pathData);
+                        const el = createPathElement(pathData, { brushColor, brushSize, brushOpacity, activeTool });
                         canvas.appendChild(el);
                     });
                     updateButtons();
@@ -244,121 +244,7 @@ function applySessionSettings(settings) {
     }
 }
 
-// ... (simplifyPoints logic remains largely unchanged) ...
-function simplifyPoints(points, tolerance = 2) {
-    if (points.length < 3) return points;
-    const sqTolerance = tolerance * tolerance;
-    const getSqDist = (p1, p2) => ((p1.x - p2.x) ** 2 + (p1.y - p2.y) ** 2);
-    const getSqSegDist = (p, p1, p2) => {
-        let x = p1.x, y = p1.y;
-        let dx = p2.x - x, dy = p2.y - y;
-        if (dx !== 0 || dy !== 0) {
-            const t = ((p.x - x) * dx + (p.y - y) * dy) / (dx * dx + dy * dy);
-            if (t > 1) { x = p2.x; y = p2.y; }
-            else if (t > 0) { x += dx * t; y += dy * t; }
-        }
-        return (p.x - x) ** 2 + (p.y - y) ** 2;
-    };
-    const simplifyDPStep = (points, first, last, sqTolerance, simplified) => {
-        let maxSqDist = sqTolerance;
-        let index = 0;
-        for (let i = first + 1; i < last; i++) {
-            const sqDist = getSqSegDist(points[i], points[first], points[last]);
-            if (sqDist > maxSqDist) { index = i; maxSqDist = sqDist; }
-        }
-        if (maxSqDist > sqTolerance) {
-            if (index - first > 1) simplifyDPStep(points, first, index, sqTolerance, simplified);
-            simplified.push(points[index]);
-            if (last - index > 1) simplifyDPStep(points, index, last, sqTolerance, simplified);
-        }
-    };
-    const last = points.length - 1;
-    const simplified = [points[0]];
-    simplifyDPStep(points, 0, last, sqTolerance, simplified);
-    simplified.push(points[last]);
-    return simplified;
-}
-
-// Convert points to smooth Bezier path
-function pointsToBezier(points) {
-    if (points.length < 2) return '';
-    const simplified = simplifyPoints(points, 3);
-    if (simplified.length < 2) return '';
-    let path = `M ${simplified[0].x.toFixed(1)} ${simplified[0].y.toFixed(1)}`;
-    if (simplified.length === 2) {
-        path += ` L ${simplified[1].x.toFixed(1)} ${simplified[1].y.toFixed(1)}`;
-        return path;
-    }
-    for (let i = 1; i < simplified.length - 1; i++) {
-        const p0 = simplified[i - 1];
-        const p1 = simplified[i];
-        const p2 = simplified[i + 1];
-        const cp1x = p0.x + (p1.x - p0.x) * 0.5;
-        const cp1y = p0.y + (p1.y - p0.y) * 0.5;
-        const cp2x = p1.x + (p2.x - p1.x) * 0.5;
-        const cp2y = p1.y + (p2.y - p1.y) * 0.5;
-        if (i === 1) {
-            path += ` Q ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} ${((p1.x + cp2x) / 2).toFixed(1)} ${((p1.y + cp2y) / 2).toFixed(1)}`;
-        } else {
-            path += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} ${((p1.x + cp2x) / 2).toFixed(1)} ${((p1.y + cp2y) / 2).toFixed(1)}`;
-        }
-    }
-    const lastPoint = simplified[simplified.length - 1];
-    const secondLast = simplified[simplified.length - 2];
-    path += ` Q ${secondLast.x.toFixed(1)} ${secondLast.y.toFixed(1)} ${lastPoint.x.toFixed(1)} ${lastPoint.y.toFixed(1)}`;
-    return path;
-}
-
-// Create SVG path element
-// pathData can be a string (legacy), an object, or a compact array [d, color, size, opacity]
-function createPathElement(pathData, isTemp = false) {
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-
-    let d = '';
-    let color = brushColor;
-    let width = brushSize;
-    let opacity = brushOpacity;
-    let fill = 'none';
-
-    if (Array.isArray(pathData)) {
-        // [d, color, width, opacity, fill]
-        d = pathData[0];
-        color = pathData[1] || 'black';
-        width = pathData[2] || 2;
-        opacity = pathData[3] !== undefined ? pathData[3] : 1;
-        fill = pathData[4] || 'none';
-    } else if (typeof pathData === 'string') {
-        d = pathData;
-        color = 'black';
-        width = 2;
-        opacity = 1;
-    } else {
-        d = pathData.d;
-        color = pathData.color || 'black';
-        width = pathData.width || 2;
-        opacity = pathData.opacity !== undefined ? pathData.opacity : 1;
-        fill = pathData.fill || 'none';
-    }
-
-    if (isTemp) {
-        color = brushColor;
-        width = brushSize;
-        opacity = brushOpacity;
-        if (activeTool !== 'pencil') {
-            fill = brushColor;
-        }
-    }
-
-    path.setAttribute('d', d);
-    path.setAttribute('stroke', color);
-    path.setAttribute('stroke-width', width);
-    path.setAttribute('fill', fill);
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    path.setAttribute('opacity', opacity);
-
-    return path;
-}
+// SVG utility functions are now in svg-utils.js
 
 // Render all paths
 function renderPaths() {
@@ -370,7 +256,7 @@ function renderPaths() {
     if (currentFrameIndex > 0) {
         const prevFrame = frames[currentFrameIndex - 1];
         prevFrame.forEach(pathData => {
-            const el = createPathElement(pathData);
+            const el = createPathElement(pathData, { brushColor, brushSize, brushOpacity, activeTool });
             // Override opacity for onion skin
             el.setAttribute('opacity', '0.3');
             // Optional: tint it or change style to distinguish?
@@ -382,12 +268,12 @@ function renderPaths() {
     // Draw current frame paths
     // 'paths' accessor now returns frames[currentFrameIndex]
     paths.forEach(pathData => {
-        canvas.appendChild(createPathElement(pathData));
+        canvas.appendChild(createPathElement(pathData, { brushColor, brushSize, brushOpacity, activeTool }));
     });
 
     if (isDrawing && currentPath.length > 1) {
         const bezierPath = pointsToBezier(currentPath);
-        canvas.appendChild(createPathElement(bezierPath, true));
+        canvas.appendChild(createPathElement(bezierPath, { brushColor, brushSize, brushOpacity, activeTool, isTemp: true }));
     }
 }
 
@@ -446,7 +332,7 @@ function draw(e) {
         d = `M ${cx.toFixed(1)} ${(cy - ry).toFixed(1)} A ${rx.toFixed(1)} ${ry.toFixed(1)} 0 1 0 ${cx.toFixed(1)} ${(cy + ry).toFixed(1)} A ${rx.toFixed(1)} ${ry.toFixed(1)} 0 1 0 ${cx.toFixed(1)} ${(cy - ry).toFixed(1)} Z`;
     }
 
-    const el = createPathElement(d, true);
+    const el = createPathElement(d, { brushColor, brushSize, brushOpacity, activeTool, isTemp: true });
     el.classList.add('temp-path');
     canvas.appendChild(el);
 }
@@ -469,7 +355,7 @@ function stopDrawing() {
             ];
 
             paths.push(pathArray);
-            canvas.appendChild(createPathElement(pathArray));
+            canvas.appendChild(createPathElement(pathArray, { brushColor, brushSize, brushOpacity, activeTool }));
 
             updateButtons();
             if (showSVG) updateSVGOutput();
@@ -802,7 +688,7 @@ function startPreviewAnimation() {
         if (pathsToRender) {
             pathsToRender.forEach(pathData => {
                 // createPathElement creates a new DOM node, so it's safe.
-                const el = createPathElement(pathData);
+                const el = createPathElement(pathData, { brushColor, brushSize, brushOpacity, activeTool });
                 previewCanvas.appendChild(el);
             });
         }
