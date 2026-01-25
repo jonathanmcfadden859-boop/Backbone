@@ -121,3 +121,112 @@ function createPathElement(pathData, context = {}) {
 
     return path;
 }
+
+/**
+ * Converts any color string (name, rgb, hsl) to a hex code
+ */
+function colorToHex(color) {
+    if (!color || color === 'none') return 'none';
+    if (color.startsWith('#')) return color;
+
+    // Create a temporary element to let the browser parse the color
+    const div = document.createElement('div');
+    div.style.color = color;
+    document.body.appendChild(div);
+    const resolved = window.getComputedStyle(div).color;
+    document.body.removeChild(div);
+
+    // Resolved will be in "rgb(r, g, b)" or "rgba(r, g, b, a)" format
+    const match = resolved.match(/\d+/g);
+    if (!match || match.length < 3) return '#000000';
+
+    const r = parseInt(match[0]);
+    const g = parseInt(match[1]);
+    const b = parseInt(match[2]);
+
+    return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+}
+
+/**
+ * Generates a formatted SVG string according to a specific Adobe Illustrator-like structure
+ * @param {Array} paths - Array of path objects or arrays
+ * @param {Number} width - Canvas width
+ * @param {Number} height - Canvas height
+ * @returns {String} Formatted SVG string
+ */
+function generateFormattedSVG(paths, width, height) {
+    const styleMap = new Map();
+    let classCounter = 0;
+
+    const getProperties = (pathData) => {
+        let d = '', color = 'black', strokeWidth = 2, opacity = 1, fill = 'none';
+        if (Array.isArray(pathData)) {
+            d = pathData[0];
+            color = pathData[1] || 'black';
+            strokeWidth = pathData[2] || 2;
+            opacity = pathData[3] !== undefined ? pathData[3] : 1;
+            fill = pathData[4] || 'none';
+        } else if (typeof pathData === 'string') {
+            d = pathData;
+        } else {
+            d = pathData.d;
+            color = pathData.color || 'black';
+            strokeWidth = pathData.width || 2;
+            opacity = pathData.opacity !== undefined ? pathData.opacity : 1;
+            fill = pathData.fill || 'none';
+        }
+        return {
+            d,
+            color: colorToHex(color),
+            strokeWidth,
+            opacity,
+            fill: colorToHex(fill)
+        };
+    };
+
+    const pathInfos = paths.map(p => {
+        const props = getProperties(p);
+        const styleKey = JSON.stringify({
+            color: props.color,
+            width: props.strokeWidth,
+            opacity: props.opacity,
+            fill: props.fill
+        });
+
+        if (!styleMap.has(styleKey)) {
+            styleMap.set(styleKey, `st${classCounter++}`);
+        }
+        return { d: props.d, className: styleMap.get(styleKey), props };
+    });
+
+    let styleContent = '';
+    styleMap.forEach((className, key) => {
+        const props = JSON.parse(key);
+        styleContent += `      .${className} {\n`;
+        if (props.color && props.color !== 'none') styleContent += `        stroke: ${props.color};\n`;
+        if (props.width) styleContent += `        stroke-width: ${props.width}px;\n`;
+        if (props.opacity !== 1) {
+            styleContent += `        isolation: isolate;\n`;
+            styleContent += `        opacity: ${props.opacity};\n`;
+        }
+        styleContent += `        fill: ${props.fill || 'none'};\n`;
+        styleContent += `        stroke-linecap: round;\n`;
+        styleContent += `        stroke-linejoin: round;\n`;
+        styleContent += `        stroke-miterlimit: 10;\n`;
+        styleContent += `      }\n\n`;
+    });
+
+    const pathStrings = pathInfos.map(info => {
+        return `  <path class="${info.className}" d="${info.d}"/>`;
+    }).join('\n');
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg id="canvas" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 ${width} ${height}">
+  <!-- Generator: Adobe Illustrator 29.8.4, SVG Export Plug-In . SVG Version: 2.1.1 Build 6)  -->
+  <defs>
+    <style>
+${styleContent}    </style>
+  </defs>
+${pathStrings}
+</svg>`;
+}

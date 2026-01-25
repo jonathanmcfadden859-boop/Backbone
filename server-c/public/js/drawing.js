@@ -397,7 +397,9 @@ function transmitDrawing() {
 }
 
 function exportSVG() {
-    const svgContent = canvas.outerHTML;
+    const w = canvas.getAttribute('width') || 800;
+    const h = canvas.getAttribute('height') || 600;
+    const svgContent = generateFormattedSVG(paths, w, h);
     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -408,15 +410,9 @@ function exportSVG() {
 }
 
 function copySVGCode() {
-    const pathStrings = paths.map((path, i) => {
-        let d = typeof path === 'string' ? path : path.d;
-        let color = typeof path === 'object' ? path.color : 'black';
-        let width = typeof path === 'object' ? path.width : 2;
-        return `  <path d="${d}" stroke="${color}" stroke-width="${width}" fill="none" />`;
-    }).join('\n');
-
-    const svgCode = `<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">\n${pathStrings}\n</svg>`;
-
+    const w = canvas.getAttribute('width') || 800;
+    const h = canvas.getAttribute('height') || 600;
+    const svgCode = generateFormattedSVG(paths, w, h);
     navigator.clipboard.writeText(svgCode).then(() => alert('SVG copied!')).catch(e => console.error(e));
 }
 
