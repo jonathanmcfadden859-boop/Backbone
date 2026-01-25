@@ -31,6 +31,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json()); // Ensure JSON body parsing
 
 // API Routes
+app.get('/key', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'key.html'));
+});
+
 app.get('/ping', (req, res) => {
     res.json({
         message: 'pong'

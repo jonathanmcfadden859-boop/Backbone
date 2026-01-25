@@ -8,7 +8,8 @@
     "start:a": "node server-a/index.js",
     "start:b": "node server-b/index.js",
     "start:c": "node server-c/index.js",
-    "start:central": "node central-server/index.js"
+    "start:central": "node central-server/index.js",
+    "start:hosted": "node server-hosted/index.js"
   },
   "keywords": [],
   "author": "",

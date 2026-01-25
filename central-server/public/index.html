@@ -35,7 +35,11 @@
         <div class="key-container">
             <h3>Current Session Key</h3>
             <div id="sessionKey" class="key-display">Loading...</div>
-            <button onclick="regenerateKey()">Regenerate Key</button>
+            <div style="display: flex; gap: 10px; flex-direction: column;">
+                <button onclick="regenerateKey()">Regenerate Key</button>
+                <a href="/key" target="_blank" style="color: #0070f3; font-size: 0.9rem; text-decoration: none;">Open
+                    Dedicated Key Page</a>
+            </div>
         </div>
 
         <div class="status">

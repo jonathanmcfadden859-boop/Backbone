@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Collaborative Drawing</title>
+    <title>Framed - Collaborative Drawing</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="vendor/phosphor/phosphor.css">
 </head>
@@ -12,13 +12,12 @@
 <body>
     <div class="app-container">
         <div id="customCursor" class="custom-cursor"></div>
-        <!-- Top Toolbar -->
         <!-- Top Info Bar -->
         <header class="top-bar">
             <div class="app-title">Framed International: Collaborative Drawing Studio</div>
             <div class="top-controls">
-                <span class="canvas-info">Canvas: 800 x 600px | Preview: 400 x 300px</span>
-                <a href="/config" class="btn btn-sm btn-outline">Config</a>
+                <span class="canvas-info">Canvas: 800 x 600px | Preview: 8 FPS</span>
+                <button id="sessionBtn" class="btn btn-sm btn-outline">Set Session</button>
             </div>
         </header>
 
@@ -104,42 +103,35 @@
 
         <!-- Bottom Timeline -->
         <footer class="timeline-area">
-
             <div class="frames-grid" id="frameGrid">
-                <!-- Javascript will populate, or we hardcode for structure -->
-                <button class="frame-btn active">1</button>
-                <button class="frame-btn">2</button>
-                <button class="frame-btn">3</button>
-                <button class="frame-btn">4</button>
-                <button class="frame-btn">5</button>
-                <button class="frame-btn">6</button>
-                <button class="frame-btn">7</button>
-                <button class="frame-btn">8</button>
-                <button class="frame-btn">9</button>
-                <button class="frame-btn">10</button>
-                <button class="frame-btn">11</button>
-                <button class="frame-btn">12</button>
-                <button class="frame-btn">13</button>
-                <button class="frame-btn">14</button>
-                <button class="frame-btn">15</button>
-                <button class="frame-btn">16</button>
-                <button class="frame-btn">17</button>
-                <button class="frame-btn">18</button>
-                <button class="frame-btn">19</button>
-                <button class="frame-btn">20</button>
+                <!-- Javascript will populate frame buttons -->
             </div>
         </footer>
 
         <!-- Bottom Status Bar -->
         <div class="status-bar">
             <span id="connectionBadge" class="status-badge offline">Offline</span>
-            <span id="connectionInfo" class="status-item"></span>
+            <span id="connectionInfo" class="status-item">Not connected</span>
             <span class="status-item">Ready</span>
-            <span class="status-item flex-grow">You are currently drawing with participants from: Unknown</span>
+            <span class="status-item flex-grow" id="userInfo">Hosted Client</span>
         </div>
     </div>
 
-    <!-- Hidden elements kept for JS compatibility if needed, or refactored out later -->
+    <!-- Session Key Modal -->
+    <div id="sessionModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h2>Enter Session Key</h2>
+            <p>Enter the session key to connect to the collaborative drawing session:</p>
+            <input type="text" id="sessionKeyInput" placeholder="Session Key"
+                style="width: 100%; padding: 10px; margin: 10px 0; font-size: 16px;">
+            <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+                <button id="cancelSessionBtn" class="btn btn-outline">Cancel</button>
+                <button id="connectSessionBtn" class="btn">Connect</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden elements for compatibility -->
     <div style="display:none;">
         <button id="exportBtn">Export</button>
         <button id="copyBtn">Copy</button>

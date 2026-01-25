@@ -76,6 +76,7 @@ if (ws.readyState === WebSocket.OPEN) {
 ws.onclose = () => {
     console.log('Disconnected from server WebSocket');
     localConnected = false;
+    // If local is gone, effectively central is gone for us too
     updateConnectionStatus();
 };
 
@@ -92,6 +93,7 @@ function updateConnectionStatus() {
     if (!connectionBadge || !connectionInfo) return;
 
     if (!localConnected) {
+        // Not connected to Node server at all
         connectionBadge.textContent = 'Offline';
         connectionBadge.className = 'status-badge offline';
         connectionInfo.textContent = 'Disconnected from Local Node';
@@ -106,8 +108,10 @@ function updateConnectionStatus() {
         connectionInfo.textContent = `Live Session Active (${centralUrl || 'Connecting...'})`;
         connectionInfo.style.color = '#e8eaed';
     } else {
+        // Connected to Node, but Node is offline from Central
         connectionBadge.textContent = 'Standby';
-        connectionBadge.className = 'status-badge offline';
+        connectionBadge.className = 'status-badge offline'; // Or maybe a new 'warning' class? User asked for "not connected" indication.
+        // Let's keep it red/offline or maybe orange. User said "A,B,C should show that they are not connected".
         connectionInfo.textContent = 'Connected to Node, but No Central Session';
         connectionInfo.style.color = 'orange';
     }
@@ -175,6 +179,7 @@ ws.onmessage = (event) => {
 };
 
 function applySessionSettings(settings) {
+    console.log('[DEBUG] Received session settings:', settings);
     // 1. Update Canvas Dimensions
     if (settings.width && settings.height) {
         canvas.setAttribute('width', settings.width);
@@ -494,6 +499,11 @@ if (colorSwatches) {
             brushColor = styleColor;
             previousColor = styleColor;
 
+            // If we are currently using eraser (though removed from UI), 
+            // maybe we should switch back to the previous tool or just pencil?
+            // But if the user says "keep state", we keep it.
+            // However, seeing as 'eraser' uses a specific color (bg), 
+            // if they are in eraser mode and pick a color, they probably want to DRAW with it.
             if (activeTool === 'eraser') {
                 activeTool = 'pencil';
                 updateToolButtons();
@@ -571,12 +581,16 @@ if (toolBtns) {
             const title = btn.getAttribute('title').toLowerCase();
             activeTool = title;
 
-            if (activeTool === 'pencil' || activeTool === 'square' || activeTool === 'circle') {
+            if (activeTool === 'pencil') {
                 brushColor = previousColor;
             } else if (activeTool === 'eraser') {
+                // Keep eraser logic if button exists, though it was removed from HTML
                 previousColor = brushColor;
                 const canvasBg = window.getComputedStyle(canvas).backgroundColor;
                 brushColor = canvasBg || '#ffffff';
+            } else {
+                // Shapes (Square, Circle)
+                brushColor = previousColor;
             }
 
             updateToolButtons();
@@ -706,3 +720,75 @@ if (fullscreenBtn) {
 
 // Start the preview
 startPreviewAnimation();
+
+// Session Key Modal Handling
+const sessionBtn = document.getElementById('sessionBtn');
+const sessionModal = document.getElementById('sessionModal');
+const sessionKeyInput = document.getElementById('sessionKeyInput');
+const connectSessionBtn = document.getElementById('connectSessionBtn');
+const cancelSessionBtn = document.getElementById('cancelSessionBtn');
+
+// Check for session key in URL parameters
+const urlParams = new URLSearchParams(window.location.search);
+const urlSessionKey = urlParams.get('session') || urlParams.get('key');
+
+if (urlSessionKey) {
+    console.log('Session key found in URL:', urlSessionKey);
+    setSessionKey(urlSessionKey);
+} else {
+    // Show modal on load if no session key
+    setTimeout(() => {
+        sessionModal.style.display = 'flex';
+        sessionKeyInput.focus();
+    }, 500);
+}
+
+sessionBtn.addEventListener('click', () => {
+    sessionModal.style.display = 'flex';
+    sessionKeyInput.value = '';
+    sessionKeyInput.focus();
+});
+
+cancelSessionBtn.addEventListener('click', () => {
+    sessionModal.style.display = 'none';
+});
+
+connectSessionBtn.addEventListener('click', () => {
+    const key = sessionKeyInput.value.trim();
+    if (key) {
+        setSessionKey(key);
+        sessionModal.style.display = 'none';
+    } else {
+        alert('Please enter a valid session key');
+    }
+});
+
+sessionKeyInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        connectSessionBtn.click();
+    }
+});
+
+function setSessionKey(key) {
+    console.log('Setting session key:', key);
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'set_session_key',
+            key: key
+        }));
+
+        // Update URL without reload
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set('session', key);
+        window.history.replaceState({}, '', newUrl);
+
+        // Update UI
+        const userInfo = document.getElementById('userInfo');
+        if (userInfo) {
+            userInfo.textContent = `Session: ${key.substring(0, 8)}...`;
+        }
+    } else {
+        console.error('WebSocket not connected');
+        alert('Connection to server failed. Please refresh the page.');
+    }
+}

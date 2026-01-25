@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Key - Framed</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .copy-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        .copy-toast.show {
+            opacity: 1;
+        }
+
+        .key-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            margin-bottom: 20px;
+        }
+
+        .instruction {
+            font-size: 0.85rem;
+            color: #666;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>Framed Studio</h1>
+        <div class="key-container">
+            <div class="key-title">Active Session Key</div>
+            <div id="sessionKey" class="key-display" onclick="copyKey()">Loading...</div>
+            <p class="instruction">Click the key to copy it to your clipboard</p>
+        </div>
+        <div class="status">
+            Central Hub Status: <span id="connectionStatus" style="color: #0070f3;">● Online</span>
+        </div>
+    </div>
+
+    <div id="toast" class="copy-toast">Key copied to clipboard!</div>
+
+    <script>
+        async function fetchKey() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                document.getElementById('sessionKey').textContent = data.sessionKey;
+            } catch (err) {
+                console.error('Failed to fetch key:', err);
+                document.getElementById('sessionKey').textContent = 'Error loading key';
+            }
+        }
+
+        async function copyKey() {
+            const key = document.getElementById('sessionKey').textContent;
+            if (key && key !== 'Loading...' && key !== 'Error loading key') {
+                try {
+                    await navigator.clipboard.writeText(key);
+                    showToast();
+                } catch (err) {
+                    console.error('Failed to copy:', err);
+                }
+            }
+        }
+
+        function showToast() {
+            const toast = document.getElementById('toast');
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2000);
+        }
+
+        fetchKey();
+        // Refresh key every 10 seconds just in case it changes
+        setInterval(fetchKey, 10000);
+    </script>
+</body>
+
+</html>

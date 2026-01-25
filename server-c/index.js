@@ -35,9 +35,9 @@ app.get('/', (req, res) => {
             console.error('Error reading index.html:', err);
             return res.status(500).send('Internal Server Error');
         }
-        // Inject cache buster params
         const result = data
             .replace('src="js/drawing.js"', `src="js/drawing.js?v=${BUILD_ID}"`)
+            .replace('src="js/svg-utils.js"', `src="js/svg-utils.js?v=${BUILD_ID}"`)
             .replace('href="css/style.css"', `href="css/style.css?v=${BUILD_ID}"`);
 
         res.send(result);

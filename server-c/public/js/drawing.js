@@ -196,8 +196,14 @@ function applySessionSettings(settings) {
         // Update Info Text
         const infoSpan = document.querySelector('.canvas-info');
         if (infoSpan) {
-            infoSpan.textContent = `Canvas: ${settings.width} x ${settings.height}px | Preview: ${settings.fps} FPS`;
+            infoSpan.textContent = `Canvas: ${settings.width} x ${settings.height}px | Preview: ${settings.fps || FPS} FPS`;
         }
+    }
+
+    const previewHeader = document.getElementById('previewHeader');
+    if (previewHeader) {
+        const f = settings.fps || FPS;
+        previewHeader.textContent = `Animation Preview • ${f} FPS • Dynamic Scale`;
     }
 
     // 2. Update Framerate
