@@ -2,12 +2,16 @@
 
 # Framed Servers (Centralized WebSocket Network)
 
+Based on the original Framed software by *Kris Meeusen* (Lab101) designed in collaboration with *Janna Beck* and *Wouter Steel* for an artistic research project at the Royal Academy of Fine Arts Antwerp, Belgium.
+
 This project demonstrates a star topology network where nodes (Server A, B, C) communicate via a Central Hub.
+
+
 
 ## TODO
 
 *   Figure out SVG export
-*   Figure out session settings on connection issue
+*   Deploy hosted client solution
 *   Currently works 100% for Chrome browser only 
 
 ## Architecture
