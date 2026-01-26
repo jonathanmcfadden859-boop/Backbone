@@ -192,7 +192,20 @@ function connectToCentral(browserWs, clientData) {
             clearInterval(clientData.heartbeatInterval);
         }
 
-        if (browserWs.readyState === WebSocket.OPEN) {
+        const browserOpen = browserWs.readyState === WebSocket.OPEN;
+
+        if (code === 1008) {
+            console.log(`[HOSTED] Client ${clientData.clientId}: Session Key became invalid (1008)`);
+            if (browserOpen) {
+                browserWs.send(JSON.stringify({
+                    t: 'central_status',
+                    s: 'invalid_key',
+                    url: '',
+                    error: 'Session key changed or expired'
+                }));
+            }
+            clientData.sessionKey = null;
+        } else if (browserOpen) {
             browserWs.send(JSON.stringify({
                 t: 'central_status',
                 s: 'disconnected',
@@ -200,8 +213,8 @@ function connectToCentral(browserWs, clientData) {
             }));
         }
 
-        // Auto-reconnect after 5 seconds if browser is still connected
-        if (browserWs.readyState === WebSocket.OPEN && clientData.sessionKey) {
+        // Auto-reconnect after 5 seconds if browser is still connected and we haven't cleared the key
+        if (browserOpen && clientData.sessionKey) {
             clientData.reconnectTimer = setTimeout(() => {
                 console.log(`[HOSTED] Client ${clientData.clientId}: Attempting reconnect...`);
                 connectToCentral(browserWs, clientData);
@@ -211,10 +224,26 @@ function connectToCentral(browserWs, clientData) {
 
     centralWs.on('error', (err) => {
         console.error(`[HOSTED] Client ${clientData.clientId}: Central WebSocket error:`, err.message);
+
         if (clientData.heartbeatInterval) {
             clearInterval(clientData.heartbeatInterval);
         }
-        if (browserWs.readyState === WebSocket.OPEN) {
+
+        const browserOpen = browserWs.readyState === WebSocket.OPEN;
+
+        if (err.message.includes('401')) {
+            console.log(`[HOSTED] Client ${clientData.clientId}: Invalid Session Key (401)`);
+            if (browserOpen) {
+                browserWs.send(JSON.stringify({
+                    t: 'central_status',
+                    s: 'invalid_key',
+                    url: '',
+                    error: 'Invalid Session Key'
+                }));
+            }
+            // Clear key so we don't keep trying to reconnect with it
+            clientData.sessionKey = null;
+        } else if (browserOpen) {
             browserWs.send(JSON.stringify({
                 t: 'central_status',
                 s: 'error',

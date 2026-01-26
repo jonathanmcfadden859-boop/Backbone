@@ -127,6 +127,32 @@ ws.onmessage = (event) => {
             const status = data.s || data.status;
             centralUrl = data.url || centralUrl;
             centralConnected = (status === 'connected');
+
+            if (status === 'invalid_key') {
+                console.error('Invalid session key received from server');
+
+                // Clear state
+                centralConnected = false;
+
+                // Clean URL (clear all parameters as requested)
+                window.history.replaceState({}, '', window.location.pathname);
+
+                // Show modal again BEFORE alert (so it's visible behind it)
+                if (sessionModal) {
+                    sessionModal.style.display = 'flex';
+                    if (sessionKeyInput) {
+                        sessionKeyInput.value = '';
+                        sessionKeyInput.focus();
+                    }
+                }
+
+                // Reset UI status
+                const userInfo = document.getElementById('userInfo');
+                if (userInfo) userInfo.textContent = 'Invalid Session';
+
+                alert('Invalid Session Key! Please check your credentials.');
+            }
+
             updateConnectionStatus();
         } else if (type === 'h' || type === 'history_snapshot') {
             const snapshotFrames = data.f || data.frames;
@@ -258,15 +284,13 @@ function renderPaths() {
         canvas.removeChild(canvas.firstChild);
     }
 
-    // Onion Skinning: Draw previous frame if it exists
-    if (currentFrameIndex > 0) {
-        const prevFrame = frames[currentFrameIndex - 1];
+    // Onion Skinning: Draw previous (or last) frame if it exists
+    const prevFrameIdx = (currentFrameIndex > 0) ? currentFrameIndex - 1 : MAX_FRAMES - 1;
+    if (frames[prevFrameIdx]) {
+        const prevFrame = frames[prevFrameIdx];
         prevFrame.forEach(pathData => {
             const el = createPathElement(pathData, { brushColor, brushSize, brushOpacity, activeTool });
-            // Override opacity for onion skin
             el.setAttribute('opacity', '0.3');
-            // Optional: tint it or change style to distinguish?
-            // For now just simpler opacity.
             canvas.appendChild(el);
         });
     }
@@ -732,15 +756,26 @@ const cancelSessionBtn = document.getElementById('cancelSessionBtn');
 const urlParams = new URLSearchParams(window.location.search);
 const urlSessionKey = urlParams.get('session') || urlParams.get('key');
 
-if (urlSessionKey) {
-    console.log('Session key found in URL:', urlSessionKey);
-    setSessionKey(urlSessionKey);
+function initSessionFlow() {
+    if (urlSessionKey) {
+        console.log('Session key found in URL, initiating connection:', urlSessionKey);
+        setSessionKey(urlSessionKey);
+    } else {
+        // Show modal on load if no session key
+        setTimeout(() => {
+            if (sessionModal) {
+                sessionModal.style.display = 'flex';
+                if (sessionKeyInput) sessionKeyInput.focus();
+            }
+        }, 500);
+    }
+}
+
+// Wait for WebSocket to be ready before initiating session flow
+if (ws.readyState === WebSocket.OPEN) {
+    initSessionFlow();
 } else {
-    // Show modal on load if no session key
-    setTimeout(() => {
-        sessionModal.style.display = 'flex';
-        sessionKeyInput.focus();
-    }, 500);
+    ws.addEventListener('open', initSessionFlow);
 }
 
 sessionBtn.addEventListener('click', () => {

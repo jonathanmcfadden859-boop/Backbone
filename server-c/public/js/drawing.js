@@ -253,15 +253,13 @@ function renderPaths() {
         canvas.removeChild(canvas.firstChild);
     }
 
-    // Onion Skinning: Draw previous frame if it exists
-    if (currentFrameIndex > 0) {
-        const prevFrame = frames[currentFrameIndex - 1];
+    // Onion Skinning: Draw previous (or last) frame if it exists
+    const prevFrameIdx = (currentFrameIndex > 0) ? currentFrameIndex - 1 : MAX_FRAMES - 1;
+    if (frames[prevFrameIdx]) {
+        const prevFrame = frames[prevFrameIdx];
         prevFrame.forEach(pathData => {
             const el = createPathElement(pathData, { brushColor, brushSize, brushOpacity, activeTool });
-            // Override opacity for onion skin
             el.setAttribute('opacity', '0.3');
-            // Optional: tint it or change style to distinguish?
-            // For now just simpler opacity.
             canvas.appendChild(el);
         });
     }
