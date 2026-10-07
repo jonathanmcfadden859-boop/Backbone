@@ -175,6 +175,7 @@ ws.onmessage = (event) => {
 };
 
 function applySessionSettings(settings) {
+    if (typeof applyPalette === "function") applyPalette(settings.palette);
     // 1. Update Canvas Dimensions
     if (settings.width && settings.height) {
         canvas.setAttribute('width', settings.width);

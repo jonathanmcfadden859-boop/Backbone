@@ -12,6 +12,22 @@ const port = 8090; // Central Server Port
 const app = express();
 const server = createServer(app);
 
+// Limits
+const MAX_PALETTE_COLORS = 8;
+const MIN_DIMENSION = 100;
+const MAX_DIMENSION = 4096; // Constrains exported document size
+
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+// Accepts #rgb or #rrggbb, returns normalized #rrggbb (or null)
+function normalizeHex(value) {
+    if (typeof value !== 'string') return null;
+    let v = value.trim().toLowerCase();
+    if (!v.startsWith('#')) v = '#' + v;
+    if (/^#[0-9a-f]{3}$/.test(v)) v = '#' + [...v.slice(1)].map(c => c + c).join('');
+    return /^#[0-9a-f]{6}$/.test(v) ? v : null;
+}
+
 // State
 let sessionKey = randomUUID(); // Initial session key
 let connections = new Set();
@@ -19,7 +35,8 @@ let sessionSettings = {
     width: 800,
     height: 600,
     fps: 8,
-    maxFrames: 20
+    maxFrames: 20,
+    palette: [] // empty = unrestricted; otherwise up to 8 hex colors
 };
 
 // Frame Data History
@@ -51,12 +68,20 @@ app.get('/api/status', (req, res) => {
 });
 
 app.post('/api/settings', (req, res) => {
-    const { width, height, fps, maxFrames } = req.body;
+    const { width, height, fps, maxFrames, palette } = req.body;
 
     // Update settings
-    if (width) sessionSettings.width = parseInt(width);
-    if (height) sessionSettings.height = parseInt(height);
+    if (parseInt(width)) sessionSettings.width = clamp(parseInt(width), MIN_DIMENSION, MAX_DIMENSION);
+    if (parseInt(height)) sessionSettings.height = clamp(parseInt(height), MIN_DIMENSION, MAX_DIMENSION);
     if (fps) sessionSettings.fps = parseInt(fps);
+
+    if (Array.isArray(palette)) {
+        const seen = new Set();
+        sessionSettings.palette = palette
+            .map(normalizeHex)
+            .filter(c => c && !seen.has(c) && seen.add(c))
+            .slice(0, MAX_PALETTE_COLORS);
+    }
 
     if (maxFrames) {
         const newMax = parseInt(maxFrames);
@@ -104,6 +129,35 @@ app.post('/api/regenerate', (req, res) => {
     // Optional: Clear history on key regeneration? 
     // Usually a new session means a clean slate.
     globalFrames = Array(sessionSettings.maxFrames).fill().map(() => []);
+
+    res.json({ success: true, sessionKey });
+});
+
+// Set a user-provided session key.
+// Restricted to URL-safe characters since the key travels in the WebSocket query string.
+const CUSTOM_KEY_PATTERN = /^[A-Za-z0-9._~-]{4,128}$/;
+
+app.post('/api/key', (req, res) => {
+    const key = typeof req.body?.key === 'string' ? req.body.key.trim() : '';
+
+    if (!CUSTOM_KEY_PATTERN.test(key)) {
+        return res.status(400).json({
+            success: false,
+            error: 'Key must be 4-128 characters: letters, numbers, dot, underscore, hyphen or tilde.'
+        });
+    }
+
+    if (key !== sessionKey) {
+        sessionKey = key;
+        console.log(`[Central] Custom Session Key Set: ${sessionKey}`);
+
+        connections.forEach(ws => {
+            ws.send(JSON.stringify({ type: 'system', message: 'Session key changed. Disconnecting.' }));
+            ws.close(1008, 'Session Key Changed');
+        });
+
+        globalFrames = Array(sessionSettings.maxFrames).fill().map(() => []);
+    }
 
     res.json({ success: true, sessionKey });
 });

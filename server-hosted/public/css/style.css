@@ -524,3 +524,7 @@ body {
 .btn:hover {
     background-color: #2563eb;
 }
+.limited-palette { display: flex; gap: 6px; align-items: center; }
+.color-picker.palette-limited > .color-gradient,
+.color-picker.palette-limited > .color-gradient-gray,
+.color-picker.palette-limited > .primary-swatch { display: none; }

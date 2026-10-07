@@ -14,7 +14,7 @@
         <div class="settings-container">
             <h3>Session Settings</h3>
             <div class="form-group">
-                <label>Canvas Size</label>
+                <label>Canvas / Export Size (100–4096 px)</label>
                 <div class="row">
                     <input type="number" id="width" placeholder="W" value="800">
                     <span>x</span>
@@ -28,6 +28,14 @@
             <div class="form-group">
                 <label>Total Frames</label>
                 <input type="number" id="maxFrames" value="20">
+            </div>
+            <div class="form-group">
+                <label>Limited Palette (0–8 colors, none = unrestricted)</label>
+                <div id="paletteEditor" class="palette-editor"></div>
+                <div class="row">
+                    <button type="button" class="btn-secondary" id="addColor">+ Add</button>
+                    <button type="button" class="btn-secondary" id="clearPalette">Unrestricted</button>
+                </div>
             </div>
             <button class="btn-secondary" onclick="updateSettings()">Apply Settings</button>
         </div>

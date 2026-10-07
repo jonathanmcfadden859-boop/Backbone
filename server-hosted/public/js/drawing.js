@@ -205,6 +205,7 @@ ws.onmessage = (event) => {
 };
 
 function applySessionSettings(settings) {
+    if (typeof applyPalette === "function") applyPalette(settings.palette);
     console.log('[DEBUG] Received session settings:', settings);
     // 1. Update Canvas Dimensions
     if (settings.width && settings.height) {

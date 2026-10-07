@@ -39,6 +39,135 @@
             color: #666;
             margin-top: 10px;
         }
+
+        .link-btn {
+            background: none;
+            color: #0070f3;
+            padding: 0;
+            font-size: 0.9rem;
+            text-decoration: none;
+        }
+
+        .link-btn:hover {
+            background: none;
+            text-decoration: underline;
+        }
+
+        .key-modal {
+            border: none;
+            border-radius: 14px;
+            padding: 0;
+            width: min(440px, 92vw);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: left;
+            color: #1a1a1a;
+        }
+
+        .key-modal::backdrop {
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px 24px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .modal-close {
+            background: none;
+            color: #888;
+            padding: 2px 8px;
+            font-size: 1.4rem;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            background: #f0f2f5;
+            color: #333;
+        }
+
+        .modal-body {
+            padding: 20px 24px 8px;
+        }
+
+        .modal-body label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #444;
+            margin-bottom: 6px;
+        }
+
+        .modal-body input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 10px 12px;
+            font-family: monospace;
+            font-size: 1rem;
+            border: 1px solid #d0d5dd;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .modal-body input:focus {
+            border-color: #0070f3;
+            box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.15);
+        }
+
+        .modal-body input.invalid {
+            border-color: #ef4444;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+        }
+
+        .modal-hint {
+            font-size: 0.8rem;
+            color: #777;
+            margin: 8px 0 0;
+        }
+
+        .modal-error {
+            font-size: 0.85rem;
+            color: #dc2626;
+            margin: 8px 0 0;
+            min-height: 1.2em;
+        }
+
+        .modal-warning {
+            font-size: 0.8rem;
+            color: #92400e;
+            background: #fef3c7;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 12px 0 0;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 16px 24px 20px;
+        }
+
+        .modal-actions .btn-secondary {
+            width: auto;
+            margin: 0;
+            background: #fff;
+            color: #444;
+            border: 1px solid #d0d5dd;
+        }
+
+        .modal-actions .btn-secondary:hover {
+            background: #f5f6f8;
+        }
     </style>
 </head>
 
@@ -50,10 +179,30 @@
             <div id="sessionKey" class="key-display" onclick="copyKey()">Loading...</div>
             <p class="instruction">Click the key to copy it to your clipboard</p>
         </div>
+        <button type="button" class="link-btn" onclick="openKeyModal()">Use Your Own Key</button>
         <div class="status">
             Central Hub Status: <span id="connectionStatus" style="color: #0070f3;">● Online</span>
         </div>
     </div>
+
+    <dialog id="keyModal" class="key-modal" aria-labelledby="keyModalTitle">
+        <div class="modal-header">
+            <h2 id="keyModalTitle">Use Your Own Key</h2>
+            <button type="button" class="modal-close" aria-label="Close" onclick="closeKeyModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <label for="customKey">Custom session key</label>
+            <input type="text" id="customKey" placeholder="my-custom-key" maxlength="128" autocomplete="off"
+                spellcheck="false">
+            <p class="modal-hint">4&ndash;128 characters: letters, numbers, <code>. _ ~ -</code></p>
+            <p id="keyError" class="modal-error" role="alert"></p>
+            <p class="modal-warning">Setting a key disconnects all currently connected nodes.</p>
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn-secondary" onclick="closeKeyModal()">Cancel</button>
+            <button type="button" id="setKeyBtn" onclick="setCustomKey()">Set Key</button>
+        </div>
+    </dialog>
 
     <div id="toast" class="copy-toast">Key copied to clipboard!</div>
 
@@ -81,13 +230,74 @@
             }
         }
 
-        function showToast() {
+        function showToast(message) {
             const toast = document.getElementById('toast');
+            if (message) toast.textContent = message;
             toast.classList.add('show');
             setTimeout(() => {
                 toast.classList.remove('show');
+                toast.textContent = 'Key copied to clipboard!';
             }, 2000);
         }
+
+        function openKeyModal() {
+            document.getElementById('keyError').textContent = '';
+            document.getElementById('keyModal').showModal();
+            document.getElementById('customKey').focus();
+        }
+
+        function closeKeyModal() {
+            document.getElementById('keyModal').close();
+        }
+
+        async function setCustomKey() {
+            const input = document.getElementById('customKey');
+            const errorEl = document.getElementById('keyError');
+            errorEl.textContent = '';
+            try {
+                const res = await fetch('/api/key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: input.value })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    errorEl.textContent = data.error || 'Failed to set key.';
+                    input.classList.add('invalid');
+                    input.focus();
+                    return;
+                }
+                closeKeyModal();
+                await fetchKey();
+                showToast('Custom key set!');
+            } catch (err) {
+                console.error(err);
+                errorEl.textContent = 'Failed to reach the server.';
+            }
+        }
+
+        function resetKeyForm() {
+            const input = document.getElementById('customKey');
+            input.value = '';
+            input.classList.remove('invalid');
+            document.getElementById('keyError').textContent = '';
+        }
+
+        // Fires for Cancel, X, backdrop click and Esc
+        document.getElementById('keyModal').addEventListener('close', resetKeyForm);
+
+        document.getElementById('keyModal').addEventListener('click', (e) => {
+            if (e.target.id === 'keyModal') closeKeyModal(); // backdrop click
+        });
+
+        document.getElementById('customKey').addEventListener('input', (e) => {
+            e.target.classList.remove('invalid');
+            document.getElementById('keyError').textContent = '';
+        });
+
+        document.getElementById('customKey').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') setCustomKey();
+        });
 
         fetchKey();
         // Refresh key every 10 seconds just in case it changes

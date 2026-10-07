@@ -1,3 +1,62 @@
+const MAX_PALETTE_COLORS = 8;
+let paletteColors = [];
+let paletteDirty = false; // true while user has unsaved palette edits
+
+function renderPalette() {
+    const box = document.getElementById('paletteEditor');
+    box.innerHTML = '';
+    paletteColors.forEach((color, i) => {
+        const row = document.createElement('div');
+        row.className = 'palette-row';
+        const picker = document.createElement('input');
+        picker.type = 'color';
+        picker.value = color;
+        const hex = document.createElement('input');
+        hex.type = 'text';
+        hex.value = color;
+        hex.maxLength = 7;
+        hex.className = 'hex-input';
+        picker.addEventListener('input', () => {
+            paletteColors[i] = picker.value;
+            hex.value = picker.value;
+            paletteDirty = true;
+        });
+        hex.addEventListener('change', () => {
+            if (/^#[0-9a-fA-F]{6}$/.test(hex.value)) {
+                paletteColors[i] = hex.value.toLowerCase();
+                picker.value = paletteColors[i];
+                paletteDirty = true;
+            } else {
+                hex.value = paletteColors[i];
+            }
+        });
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.textContent = '✕';
+        del.addEventListener('click', () => {
+            paletteColors.splice(i, 1);
+            paletteDirty = true;
+            renderPalette();
+        });
+        row.append(picker, hex, del);
+        box.appendChild(row);
+    });
+    document.getElementById('addColor').disabled = paletteColors.length >= MAX_PALETTE_COLORS;
+}
+
+document.getElementById('addColor').addEventListener('click', () => {
+    if (paletteColors.length < MAX_PALETTE_COLORS) {
+        paletteColors.push('#000000');
+        paletteDirty = true;
+        renderPalette();
+    }
+});
+document.getElementById('clearPalette').addEventListener('click', () => {
+    paletteColors = [];
+    paletteDirty = true;
+    renderPalette();
+});
+
 async function fetchInfo() {
     try {
         const res = await fetch('/api/status');
@@ -12,6 +71,10 @@ async function fetchInfo() {
                 document.getElementById('height').value = data.settings.height;
                 document.getElementById('fps').value = data.settings.fps;
                 document.getElementById('maxFrames').value = data.settings.maxFrames;
+                if (!paletteDirty) {
+                    paletteColors = [...(data.settings.palette || [])];
+                    renderPalette();
+                }
             }
         }
     } catch (e) {
@@ -29,8 +92,9 @@ async function updateSettings() {
         await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ width, height, fps, maxFrames })
+            body: JSON.stringify({ width, height, fps, maxFrames, palette: paletteColors })
         });
+        paletteDirty = false;
         alert('Settings Updated & Broadcasted!');
         await fetchInfo();
     } catch (e) {
