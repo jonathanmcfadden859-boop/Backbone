@@ -3,7 +3,7 @@
 //   - Swatches in the toolbar (#limitedPalette)
 //   - Keys 1-8 select the matching palette color
 //   - window.palette -> current array of hex colors (empty = unrestricted)
-//   - Save options modal & color separation export when limited palette is active
+//   - Save options modal: choice between Single Document Save and Color Separation (3+ documents)
 (function () {
     const MAX_COLORS = 8;
     window.palette = [];
@@ -115,7 +115,7 @@
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
     }
 
     function createSimpleZip(files) {
@@ -255,28 +255,30 @@
                 <button type="button" class="save-modal-close" id="saveModalClose" aria-label="Close">&times;</button>
             </div>
             <div class="save-modal-body">
+                <!-- Option 1: Single Document Save -->
                 <div class="save-option-card">
-                    <div class="save-option-title">Whole Image</div>
-                    <div class="save-option-desc">Export the entire artwork with all colors in a single SVG file.</div>
+                    <div class="save-option-title">Single Document Save</div>
+                    <div class="save-option-desc">Save the entire drawing as 1 complete SVG document with all colors combined.</div>
                     <div>
                         <button type="button" class="save-btn-primary" id="saveWholeImageBtn">
-                            <i class="ph ph-image"></i> Save Whole Image (SVG)
+                            <i class="ph ph-file-svg"></i> Save Single Document (SVG)
                         </button>
                     </div>
                 </div>
 
+                <!-- Option 2: Color Separation -->
                 <div class="save-option-card">
-                    <div class="save-option-title" id="sepCardTitle">Color Separations</div>
+                    <div class="save-option-title" id="sepCardTitle">Color Separation</div>
                     <div class="save-option-desc">
-                        Export separated SVG layers for all predefined palette colors.
+                        Save each predefined palette color as a separate SVG document (aligned layers for screen printing, risograph, or vinyl cutting).
                     </div>
                     <div class="separations-list" id="separationsList"></div>
                     <div class="save-actions-row">
                         <button type="button" class="save-btn-primary" id="saveAllZipBtn">
-                            <i class="ph ph-archive"></i> Download All (.zip)
+                            <i class="ph ph-archive"></i> Download All Documents (.zip)
                         </button>
                         <button type="button" class="save-btn-secondary" id="saveAllSvgBtn">
-                            <i class="ph ph-download-simple"></i> Download All (.svg files)
+                            <i class="ph ph-download-simple"></i> Download Separate SVG Files
                         </button>
                     </div>
                 </div>
@@ -298,7 +300,7 @@
         modal.querySelector('#saveWholeImageBtn').addEventListener('click', () => {
             modal.close();
             if (typeof window.exportSVG === 'function') {
-                window.exportSVG(true);
+                window.exportSVG();
             }
         });
 
@@ -318,7 +320,7 @@
                 setTimeout(() => {
                     const blob = new Blob([s.svgContent], { type: 'image/svg+xml' });
                     downloadBlob(blob, s.filename);
-                }, i * 200);
+                }, i * 250);
             });
         });
 
@@ -327,7 +329,7 @@
 
     function showSaveModal() {
         if (!window.palette || window.palette.length === 0) {
-            if (typeof window.exportSVG === 'function') window.exportSVG(true);
+            if (typeof window.exportSVG === 'function') window.exportSVG();
             return;
         }
         const modal = createSaveModalDOM();
@@ -335,7 +337,17 @@
 
         const titleEl = modal.querySelector('#sepCardTitle');
         if (titleEl) {
-            titleEl.textContent = `Color Separations (${seps.length} Colors)`;
+            titleEl.textContent = `Color Separation (${seps.length} Separate Documents)`;
+        }
+
+        const zipBtn = modal.querySelector('#saveAllZipBtn');
+        if (zipBtn) {
+            zipBtn.innerHTML = `<i class="ph ph-archive"></i> Download All ${seps.length} Documents (.zip)`;
+        }
+
+        const svgBtn = modal.querySelector('#saveAllSvgBtn');
+        if (svgBtn) {
+            svgBtn.innerHTML = `<i class="ph ph-download-simple"></i> Download ${seps.length} Separate SVG Files`;
         }
 
         const listEl = modal.querySelector('#separationsList');
@@ -380,7 +392,31 @@
             });
         }
 
-        modal.showModal();
+        if (typeof modal.showModal === 'function') {
+            modal.showModal();
+        } else {
+            modal.setAttribute('open', '');
+        }
     }
     window.showSaveModal = showSaveModal;
+
+    // Intercept Save button click directly during capture phase
+    function attachSaveInterceptor() {
+        const saveBtn = document.getElementById('saveBtn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', (e) => {
+                if (window.palette && window.palette.length > 0) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    showSaveModal();
+                }
+            }, true);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', attachSaveInterceptor);
+    } else {
+        attachSaveInterceptor();
+    }
 })();

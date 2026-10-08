@@ -407,7 +407,7 @@ function transmitDrawing() {
 }
 
 function exportSVG(forceFull = false) {
-    if (!forceFull && window.palette && window.palette.length > 0 && typeof window.showSaveModal === 'function') {
+    if (forceFull !== true && window.palette && window.palette.length > 0 && typeof window.showSaveModal === 'function') {
         window.showSaveModal();
         return;
     }
