@@ -401,7 +401,11 @@ function transmitDrawing() {
     }
 }
 
-function exportSVG() {
+function exportSVG(forceFull = false) {
+    if (!forceFull && window.palette && window.palette.length > 0 && typeof window.showSaveModal === 'function') {
+        window.showSaveModal();
+        return;
+    }
     const w = canvas.getAttribute('width') || 800;
     const h = canvas.getAttribute('height') || 600;
     const svgContent = generateFormattedSVG(paths, w, h);
@@ -413,6 +417,7 @@ function exportSVG() {
     a.click();
     URL.revokeObjectURL(url);
 }
+window.exportSVG = exportSVG;
 
 function copySVGCode() {
     const w = canvas.getAttribute('width') || 800;
