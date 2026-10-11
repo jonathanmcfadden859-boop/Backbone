@@ -7,6 +7,9 @@ Object.defineProperty(window, 'paths', {
     get: function () { return frames[currentFrameIndex]; },
     set: function (val) { frames[currentFrameIndex] = val; }
 });
+window.getAllFrames = () => frames;
+window.getCurrentFrameIndex = () => currentFrameIndex;
+window.getMaxFrames = () => MAX_FRAMES;
 
 let FPS = 8;
 let frameDuration = 1000 / FPS;
@@ -76,6 +79,7 @@ if (ws.readyState === WebSocket.OPEN) {
 ws.onclose = () => {
     console.log('Disconnected from server WebSocket');
     localConnected = false;
+    // If local is gone, effectively central is gone for us too
     updateConnectionStatus();
 };
 
@@ -92,6 +96,7 @@ function updateConnectionStatus() {
     if (!connectionBadge || !connectionInfo) return;
 
     if (!localConnected) {
+        // Not connected to Node server at all
         connectionBadge.textContent = 'Offline';
         connectionBadge.className = 'status-badge offline';
         connectionInfo.textContent = 'Disconnected from Local Node';
@@ -106,8 +111,10 @@ function updateConnectionStatus() {
         connectionInfo.textContent = `Live Session Active (${centralUrl || 'Connecting...'})`;
         connectionInfo.style.color = '#e8eaed';
     } else {
+        // Connected to Node, but Node is offline from Central
         connectionBadge.textContent = 'Standby';
-        connectionBadge.className = 'status-badge offline';
+        connectionBadge.className = 'status-badge offline'; // Or maybe a new 'warning' class? User asked for "not connected" indication.
+        // Let's keep it red/offline or maybe orange. User said "A,B,C should show that they are not connected".
         connectionInfo.textContent = 'Connected to Node, but No Central Session';
         connectionInfo.style.color = 'orange';
     }
@@ -123,6 +130,32 @@ ws.onmessage = (event) => {
             const status = data.s || data.status;
             centralUrl = data.url || centralUrl;
             centralConnected = (status === 'connected');
+
+            if (status === 'invalid_key') {
+                console.error('Invalid session key received from server');
+
+                // Clear state
+                centralConnected = false;
+
+                // Clean URL (clear all parameters as requested)
+                window.history.replaceState({}, '', window.location.pathname);
+
+                // Show modal again BEFORE alert (so it's visible behind it)
+                if (sessionModal) {
+                    sessionModal.style.display = 'flex';
+                    if (sessionKeyInput) {
+                        sessionKeyInput.value = '';
+                        sessionKeyInput.focus();
+                    }
+                }
+
+                // Reset UI status
+                const userInfo = document.getElementById('userInfo');
+                if (userInfo) userInfo.textContent = 'Invalid Session';
+
+                alert('Invalid Session Key! Please check your credentials.');
+            }
+
             updateConnectionStatus();
         } else if (type === 'h' || type === 'history_snapshot') {
             const snapshotFrames = data.f || data.frames;
@@ -168,6 +201,10 @@ ws.onmessage = (event) => {
             const settings = data.s || data.settings;
             console.log('Received session settings update:', settings);
             if (settings) applySessionSettings(settings);
+        } else if (type === 'participants') {
+            const count = data.count !== undefined ? data.count : 1;
+            const countEl = document.getElementById('participantCount');
+            if (countEl) countEl.textContent = Math.max(1, count);
         }
     } catch (e) {
         // console.log('Received non-drawing message', event.data);
@@ -176,6 +213,7 @@ ws.onmessage = (event) => {
 
 function applySessionSettings(settings) {
     if (typeof applyPalette === "function") applyPalette(settings.palette);
+    console.log('[DEBUG] Received session settings:', settings);
     // 1. Update Canvas Dimensions
     if (settings.width && settings.height) {
         canvas.setAttribute('width', settings.width);
@@ -298,19 +336,35 @@ function updateButtons() {
     if (copyBtn.style) copyBtn.disabled = !hasContent;
 }
 
-function startDrawing(e) {
-    isDrawing = true;
+function getCanvasCoords(e) {
     const rect = canvas.getBoundingClientRect();
-    startX = e.clientX - rect.left;
-    startY = e.clientY - rect.top;
+    const svgW = parseFloat(canvas.getAttribute('width')) || rect.width;
+    const svgH = parseFloat(canvas.getAttribute('height')) || rect.height;
+    const scaleX = rect.width > 0 ? (svgW / rect.width) : 1;
+    const scaleY = rect.height > 0 ? (svgH / rect.height) : 1;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+function startDrawing(e) {
+    if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+    try {
+        canvas.setPointerCapture(e.pointerId);
+    } catch (err) {}
+    isDrawing = true;
+    const coords = getCanvasCoords(e);
+    startX = coords.x;
+    startY = coords.y;
     currentPath = [{ x: startX, y: startY }];
 }
 
 function draw(e) {
     if (!isDrawing) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const coords = getCanvasCoords(e);
+    const x = coords.x;
+    const y = coords.y;
 
     // Remove existing temporary path element
     const tempPath = canvas.querySelector('.temp-path');
@@ -337,8 +391,13 @@ function draw(e) {
     canvas.appendChild(el);
 }
 
-function stopDrawing() {
+function stopDrawing(e) {
     if (isDrawing) {
+        if (e && e.pointerId !== undefined) {
+            try {
+                canvas.releasePointerCapture(e.pointerId);
+            } catch (err) {}
+        }
         const tempPath = canvas.querySelector('.temp-path');
         if (tempPath) {
             const d = tempPath.getAttribute('d');
@@ -360,6 +419,9 @@ function stopDrawing() {
             updateButtons();
             if (showSVG) updateSVGOutput();
             if (isLive) transmitDrawing();
+        }
+        if (customCursor && !isCursorVisible) {
+            customCursor.style.display = 'none';
         }
     }
     isDrawing = false;
@@ -413,9 +475,12 @@ function exportSVG(forceFull = false) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'drawing.svg';
+    const frameNum = String(currentFrameIndex + 1).padStart(2, '0');
+    a.download = `frame-${frameNum}.svg`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 window.exportSVG = exportSVG;
 
@@ -457,26 +522,27 @@ if (sizeSlider) {
 }
 
 // Custom Cursor Tracking
+let isCursorVisible = false;
 if (customCursor) {
-    document.addEventListener('mousemove', (e) => {
-        // Only show if hovering canvas
-        // (Actually, 'mousemove' on document is expensive, better to just update position if visible)
-        // But to have it strictly "turn into" circle when ENTERING canvas:
-        if (isCursorVisible) {
+    document.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'mouse' && (isCursorVisible || isDrawing)) {
             customCursor.style.left = `${e.clientX}px`;
             customCursor.style.top = `${e.clientY}px`;
         }
     });
 }
-let isCursorVisible = false;
 
-canvas.addEventListener('mouseenter', () => {
-    isCursorVisible = true;
-    if (customCursor) customCursor.style.display = 'block';
+canvas.addEventListener('pointerenter', (e) => {
+    if (e.pointerType === 'mouse') {
+        isCursorVisible = true;
+        if (customCursor) customCursor.style.display = 'block';
+    }
 });
-canvas.addEventListener('mouseleave', () => {
-    isCursorVisible = false;
-    if (customCursor) customCursor.style.display = 'none';
+canvas.addEventListener('pointerleave', (e) => {
+    if (e.pointerType === 'mouse') {
+        isCursorVisible = false;
+        if (customCursor && !isDrawing) customCursor.style.display = 'none';
+    }
 });
 
 if (opacitySlider) {
@@ -498,6 +564,11 @@ if (colorSwatches) {
             brushColor = styleColor;
             previousColor = styleColor;
 
+            // If we are currently using eraser (though removed from UI), 
+            // maybe we should switch back to the previous tool or just pencil?
+            // But if the user says "keep state", we keep it.
+            // However, seeing as 'eraser' uses a specific color (bg), 
+            // if they are in eraser mode and pick a color, they probably want to DRAW with it.
             if (activeTool === 'eraser') {
                 activeTool = 'pencil';
                 updateToolButtons();
@@ -575,11 +646,16 @@ if (toolBtns) {
             const title = btn.getAttribute('title').toLowerCase();
             activeTool = title;
 
-            if (activeTool === 'pencil' || activeTool === 'square' || activeTool === 'circle') {
+            if (activeTool === 'pencil') {
                 brushColor = previousColor;
-                // without expensive geometric boolean operations on Bezier curves.
+            } else if (activeTool === 'eraser') {
+                // Keep eraser logic if button exists, though it was removed from HTML
+                previousColor = brushColor;
                 const canvasBg = window.getComputedStyle(canvas).backgroundColor;
                 brushColor = canvasBg || '#ffffff';
+            } else {
+                // Shapes (Square, Circle)
+                brushColor = previousColor;
             }
 
             updateToolButtons();
@@ -590,11 +666,11 @@ if (toolBtns) {
 }
 
 
-// Attach event listeners
-canvas.addEventListener('mousedown', startDrawing);
-canvas.addEventListener('mousemove', draw);
-canvas.addEventListener('mouseup', stopDrawing);
-canvas.addEventListener('mouseleave', stopDrawing);
+// Attach event listeners (Pointer Events for cross-device & tablet support)
+canvas.addEventListener('pointerdown', startDrawing);
+window.addEventListener('pointermove', draw);
+window.addEventListener('pointerup', stopDrawing);
+canvas.addEventListener('pointercancel', stopDrawing);
 
 // Action Buttons
 if (clearBtn) clearBtn.addEventListener('click', clearDrawing);
@@ -614,6 +690,8 @@ if (toggleBtn.addEventListener) toggleBtn.addEventListener('click', toggleSVGDis
 // Frame Logic
 const frameGrid = document.getElementById('frameGrid');
 const currentFrameDisplay = document.getElementById('currentFrameDisplay');
+const prevFrameBtn = document.getElementById('prevFrameBtn');
+const nextFrameBtn = document.getElementById('nextFrameBtn');
 
 function switchFrame(index) {
     if (index < 0 || index >= MAX_FRAMES) return;
@@ -623,11 +701,13 @@ function switchFrame(index) {
     if (currentFrameDisplay) currentFrameDisplay.textContent = index + 1;
 
     // Update active button
-    const buttons = frameGrid.querySelectorAll('.frame-btn');
-    buttons.forEach((btn, i) => {
-        if (i === index) btn.classList.add('active');
-        else btn.classList.remove('active');
-    });
+    if (frameGrid) {
+        const buttons = frameGrid.querySelectorAll('.frame-btn');
+        buttons.forEach((btn, i) => {
+            if (i === index) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+    }
 
     // Reset transmission tracking for this frame (simplification for now)
     lastTransmittedIndex = frames[currentFrameIndex].length;
@@ -635,6 +715,32 @@ function switchFrame(index) {
     renderPaths();
     updateButtons();
 }
+
+function stepFrame(delta) {
+    let nextIndex = currentFrameIndex + delta;
+    if (nextIndex < 0) nextIndex = MAX_FRAMES - 1; // Wrap around backwards
+    if (nextIndex >= MAX_FRAMES) nextIndex = 0;   // Wrap around forwards
+    switchFrame(nextIndex);
+}
+window.stepFrame = stepFrame;
+
+if (prevFrameBtn) prevFrameBtn.addEventListener('click', () => stepFrame(-1));
+if (nextFrameBtn) nextFrameBtn.addEventListener('click', () => stepFrame(1));
+
+window.addEventListener('keydown', (e) => {
+    const t = e.target;
+    const isTyping = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    const isModalOpen = document.querySelector('dialog[open], .modal[style*="display: flex"], .modal[style*="display: block"]');
+    if (isTyping || isModalOpen) return;
+
+    if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepFrame(-1);
+    } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepFrame(1);
+    }
+});
 
 function initFrameButtons() {
     if (!frameGrid) return;
@@ -709,3 +815,98 @@ if (fullscreenBtn) {
 
 // Start the preview
 startPreviewAnimation();
+
+// Session Key Modal Handling
+const sessionBtn = document.getElementById('sessionBtn');
+const sessionModal = document.getElementById('sessionModal');
+const sessionKeyInput = document.getElementById('sessionKeyInput');
+const connectSessionBtn = document.getElementById('connectSessionBtn');
+const cancelSessionBtn = document.getElementById('cancelSessionBtn');
+
+// Check for session key in URL parameters
+const urlParams = new URLSearchParams(window.location.search);
+const urlSessionKey = urlParams.get('session') || urlParams.get('key');
+
+function initSessionFlow() {
+    if (urlSessionKey) {
+        console.log('Session key found in URL, initiating connection:', urlSessionKey);
+        setSessionKey(urlSessionKey);
+    } else {
+        // Show modal on load if no session key
+        setTimeout(() => {
+            if (sessionModal) {
+                sessionModal.style.display = 'flex';
+                if (sessionKeyInput) sessionKeyInput.focus();
+            }
+        }, 500);
+    }
+}
+
+// Wait for WebSocket to be ready before initiating session flow
+if (sessionModal) {
+    if (ws.readyState === WebSocket.OPEN) {
+        initSessionFlow();
+    } else {
+        ws.addEventListener('open', initSessionFlow);
+    }
+
+    if (sessionBtn) {
+        sessionBtn.addEventListener('click', () => {
+            sessionModal.style.display = 'flex';
+            if (sessionKeyInput) {
+                sessionKeyInput.value = '';
+                sessionKeyInput.focus();
+            }
+        });
+    }
+
+    if (cancelSessionBtn) {
+        cancelSessionBtn.addEventListener('click', () => {
+            sessionModal.style.display = 'none';
+        });
+    }
+
+    if (connectSessionBtn) {
+        connectSessionBtn.addEventListener('click', () => {
+            const key = sessionKeyInput ? sessionKeyInput.value.trim() : '';
+            if (key) {
+                setSessionKey(key);
+                sessionModal.style.display = 'none';
+            } else {
+                alert('Please enter a valid session key');
+            }
+        });
+    }
+
+    if (sessionKeyInput) {
+        sessionKeyInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && connectSessionBtn) {
+                connectSessionBtn.click();
+            }
+        });
+    }
+}
+
+function setSessionKey(key) {
+    console.log('Setting session key:', key);
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'set_session_key',
+            key: key
+        }));
+
+        // Update URL without reload
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.set('session', key);
+        window.history.replaceState({}, '', newUrl);
+
+        // Update UI
+        const userInfo = document.getElementById('userInfo');
+        if (userInfo) {
+            userInfo.textContent = `Session: ${key.substring(0, 8)}...`;
+        }
+    } else {
+        console.error('WebSocket not connected');
+        alert('Connection to server failed. Please refresh the page.');
+    }
+}

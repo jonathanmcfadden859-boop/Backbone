@@ -104,7 +104,7 @@ function createPathElement(pathData, context = {}) {
 
     if (context.isTemp) {
         color = context.brushColor;
-        width = context.brushSize;
+        width = context.activeTool === 'pencil' ? (context.brushSize || 2) : 1;
         opacity = context.brushOpacity;
         if (context.activeTool !== 'pencil') {
             fill = context.brushColor;

@@ -83,8 +83,8 @@ app.post('/api/settings', (req, res) => {
             .slice(0, MAX_PALETTE_COLORS);
     }
 
-    if (maxFrames) {
-        const newMax = parseInt(maxFrames);
+    if (maxFrames !== undefined && !isNaN(parseInt(maxFrames))) {
+        const newMax = Math.max(1, Math.min(100, parseInt(maxFrames)));
         if (newMax !== sessionSettings.maxFrames) {
             sessionSettings.maxFrames = newMax;
             // Resize globalFrames history
@@ -183,9 +183,21 @@ server.on('upgrade', (request, socket, head) => {
     });
 });
 
+function broadcastParticipantCount() {
+    const msg = JSON.stringify({
+        t: 'participants',
+        count: connections.size
+    });
+    connections.forEach(client => {
+        if (client.readyState === 1) { // OPEN
+            client.send(msg);
+        }
+    });
+}
+
 wss.on('connection', function connection(ws) {
     connections.add(ws);
-    console.log('[Central] Node connected');
+    console.log(`[Central] Node connected. Total active connections: ${connections.size}`);
 
     // Send Current Settings
     ws.send(JSON.stringify({
@@ -193,12 +205,8 @@ wss.on('connection', function connection(ws) {
         s: sessionSettings
     }));
 
-    // Send Initial Snapshot of History
-    // We send it as a series of drawing_updates or a single snapshot type?
-    // Client currently handles 'drawing_update'. To minimize client changes, 
-    // let's send a bulk drawing_update for EACH frame that has content.
-    // Or we could implement a 'snapshot' type if we updated the client.
-    // Let's stick to 'drawing_update' compatibility to start.
+    // Broadcast updated participant count to all nodes
+    broadcastParticipantCount();
 
     // Send Initial Snapshot of History
     console.log('[Central] Sending history snapshot to new client...');
@@ -256,6 +264,7 @@ wss.on('connection', function connection(ws) {
     ws.on('close', () => {
         console.log('[Central] Node disconnected');
         connections.delete(ws);
+        broadcastParticipantCount();
     });
 });
 

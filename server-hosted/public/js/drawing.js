@@ -7,6 +7,9 @@ Object.defineProperty(window, 'paths', {
     get: function () { return frames[currentFrameIndex]; },
     set: function (val) { frames[currentFrameIndex] = val; }
 });
+window.getAllFrames = () => frames;
+window.getCurrentFrameIndex = () => currentFrameIndex;
+window.getMaxFrames = () => MAX_FRAMES;
 
 let FPS = 8;
 let frameDuration = 1000 / FPS;
@@ -198,6 +201,10 @@ ws.onmessage = (event) => {
             const settings = data.s || data.settings;
             console.log('Received session settings update:', settings);
             if (settings) applySessionSettings(settings);
+        } else if (type === 'participants') {
+            const count = data.count !== undefined ? data.count : 1;
+            const countEl = document.getElementById('participantCount');
+            if (countEl) countEl.textContent = Math.max(1, count);
         }
     } catch (e) {
         // console.log('Received non-drawing message', event.data);
@@ -329,19 +336,35 @@ function updateButtons() {
     if (copyBtn.style) copyBtn.disabled = !hasContent;
 }
 
-function startDrawing(e) {
-    isDrawing = true;
+function getCanvasCoords(e) {
     const rect = canvas.getBoundingClientRect();
-    startX = e.clientX - rect.left;
-    startY = e.clientY - rect.top;
+    const svgW = parseFloat(canvas.getAttribute('width')) || rect.width;
+    const svgH = parseFloat(canvas.getAttribute('height')) || rect.height;
+    const scaleX = rect.width > 0 ? (svgW / rect.width) : 1;
+    const scaleY = rect.height > 0 ? (svgH / rect.height) : 1;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+function startDrawing(e) {
+    if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+    try {
+        canvas.setPointerCapture(e.pointerId);
+    } catch (err) {}
+    isDrawing = true;
+    const coords = getCanvasCoords(e);
+    startX = coords.x;
+    startY = coords.y;
     currentPath = [{ x: startX, y: startY }];
 }
 
 function draw(e) {
     if (!isDrawing) return;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const coords = getCanvasCoords(e);
+    const x = coords.x;
+    const y = coords.y;
 
     // Remove existing temporary path element
     const tempPath = canvas.querySelector('.temp-path');
@@ -368,8 +391,13 @@ function draw(e) {
     canvas.appendChild(el);
 }
 
-function stopDrawing() {
+function stopDrawing(e) {
     if (isDrawing) {
+        if (e && e.pointerId !== undefined) {
+            try {
+                canvas.releasePointerCapture(e.pointerId);
+            } catch (err) {}
+        }
         const tempPath = canvas.querySelector('.temp-path');
         if (tempPath) {
             const d = tempPath.getAttribute('d');
@@ -391,6 +419,9 @@ function stopDrawing() {
             updateButtons();
             if (showSVG) updateSVGOutput();
             if (isLive) transmitDrawing();
+        }
+        if (customCursor && !isCursorVisible) {
+            customCursor.style.display = 'none';
         }
     }
     isDrawing = false;
@@ -444,9 +475,12 @@ function exportSVG(forceFull = false) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'drawing.svg';
+    const frameNum = String(currentFrameIndex + 1).padStart(2, '0');
+    a.download = `frame-${frameNum}.svg`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 window.exportSVG = exportSVG;
 
@@ -488,26 +522,27 @@ if (sizeSlider) {
 }
 
 // Custom Cursor Tracking
+let isCursorVisible = false;
 if (customCursor) {
-    document.addEventListener('mousemove', (e) => {
-        // Only show if hovering canvas
-        // (Actually, 'mousemove' on document is expensive, better to just update position if visible)
-        // But to have it strictly "turn into" circle when ENTERING canvas:
-        if (isCursorVisible) {
+    document.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'mouse' && (isCursorVisible || isDrawing)) {
             customCursor.style.left = `${e.clientX}px`;
             customCursor.style.top = `${e.clientY}px`;
         }
     });
 }
-let isCursorVisible = false;
 
-canvas.addEventListener('mouseenter', () => {
-    isCursorVisible = true;
-    if (customCursor) customCursor.style.display = 'block';
+canvas.addEventListener('pointerenter', (e) => {
+    if (e.pointerType === 'mouse') {
+        isCursorVisible = true;
+        if (customCursor) customCursor.style.display = 'block';
+    }
 });
-canvas.addEventListener('mouseleave', () => {
-    isCursorVisible = false;
-    if (customCursor) customCursor.style.display = 'none';
+canvas.addEventListener('pointerleave', (e) => {
+    if (e.pointerType === 'mouse') {
+        isCursorVisible = false;
+        if (customCursor && !isDrawing) customCursor.style.display = 'none';
+    }
 });
 
 if (opacitySlider) {
@@ -631,11 +666,11 @@ if (toolBtns) {
 }
 
 
-// Attach event listeners
-canvas.addEventListener('mousedown', startDrawing);
-canvas.addEventListener('mousemove', draw);
-canvas.addEventListener('mouseup', stopDrawing);
-canvas.addEventListener('mouseleave', stopDrawing);
+// Attach event listeners (Pointer Events for cross-device & tablet support)
+canvas.addEventListener('pointerdown', startDrawing);
+window.addEventListener('pointermove', draw);
+window.addEventListener('pointerup', stopDrawing);
+canvas.addEventListener('pointercancel', stopDrawing);
 
 // Action Buttons
 if (clearBtn) clearBtn.addEventListener('click', clearDrawing);
@@ -655,6 +690,8 @@ if (toggleBtn.addEventListener) toggleBtn.addEventListener('click', toggleSVGDis
 // Frame Logic
 const frameGrid = document.getElementById('frameGrid');
 const currentFrameDisplay = document.getElementById('currentFrameDisplay');
+const prevFrameBtn = document.getElementById('prevFrameBtn');
+const nextFrameBtn = document.getElementById('nextFrameBtn');
 
 function switchFrame(index) {
     if (index < 0 || index >= MAX_FRAMES) return;
@@ -664,11 +701,13 @@ function switchFrame(index) {
     if (currentFrameDisplay) currentFrameDisplay.textContent = index + 1;
 
     // Update active button
-    const buttons = frameGrid.querySelectorAll('.frame-btn');
-    buttons.forEach((btn, i) => {
-        if (i === index) btn.classList.add('active');
-        else btn.classList.remove('active');
-    });
+    if (frameGrid) {
+        const buttons = frameGrid.querySelectorAll('.frame-btn');
+        buttons.forEach((btn, i) => {
+            if (i === index) btn.classList.add('active');
+            else btn.classList.remove('active');
+        });
+    }
 
     // Reset transmission tracking for this frame (simplification for now)
     lastTransmittedIndex = frames[currentFrameIndex].length;
@@ -676,6 +715,32 @@ function switchFrame(index) {
     renderPaths();
     updateButtons();
 }
+
+function stepFrame(delta) {
+    let nextIndex = currentFrameIndex + delta;
+    if (nextIndex < 0) nextIndex = MAX_FRAMES - 1; // Wrap around backwards
+    if (nextIndex >= MAX_FRAMES) nextIndex = 0;   // Wrap around forwards
+    switchFrame(nextIndex);
+}
+window.stepFrame = stepFrame;
+
+if (prevFrameBtn) prevFrameBtn.addEventListener('click', () => stepFrame(-1));
+if (nextFrameBtn) nextFrameBtn.addEventListener('click', () => stepFrame(1));
+
+window.addEventListener('keydown', (e) => {
+    const t = e.target;
+    const isTyping = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    const isModalOpen = document.querySelector('dialog[open], .modal[style*="display: flex"], .modal[style*="display: block"]');
+    if (isTyping || isModalOpen) return;
+
+    if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        stepFrame(-1);
+    } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        stepFrame(1);
+    }
+});
 
 function initFrameButtons() {
     if (!frameGrid) return;
@@ -778,37 +843,49 @@ function initSessionFlow() {
 }
 
 // Wait for WebSocket to be ready before initiating session flow
-if (ws.readyState === WebSocket.OPEN) {
-    initSessionFlow();
-} else {
-    ws.addEventListener('open', initSessionFlow);
-}
-
-sessionBtn.addEventListener('click', () => {
-    sessionModal.style.display = 'flex';
-    sessionKeyInput.value = '';
-    sessionKeyInput.focus();
-});
-
-cancelSessionBtn.addEventListener('click', () => {
-    sessionModal.style.display = 'none';
-});
-
-connectSessionBtn.addEventListener('click', () => {
-    const key = sessionKeyInput.value.trim();
-    if (key) {
-        setSessionKey(key);
-        sessionModal.style.display = 'none';
+if (sessionModal) {
+    if (ws.readyState === WebSocket.OPEN) {
+        initSessionFlow();
     } else {
-        alert('Please enter a valid session key');
+        ws.addEventListener('open', initSessionFlow);
     }
-});
 
-sessionKeyInput.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') {
-        connectSessionBtn.click();
+    if (sessionBtn) {
+        sessionBtn.addEventListener('click', () => {
+            sessionModal.style.display = 'flex';
+            if (sessionKeyInput) {
+                sessionKeyInput.value = '';
+                sessionKeyInput.focus();
+            }
+        });
     }
-});
+
+    if (cancelSessionBtn) {
+        cancelSessionBtn.addEventListener('click', () => {
+            sessionModal.style.display = 'none';
+        });
+    }
+
+    if (connectSessionBtn) {
+        connectSessionBtn.addEventListener('click', () => {
+            const key = sessionKeyInput ? sessionKeyInput.value.trim() : '';
+            if (key) {
+                setSessionKey(key);
+                sessionModal.style.display = 'none';
+            } else {
+                alert('Please enter a valid session key');
+            }
+        });
+    }
+
+    if (sessionKeyInput) {
+        sessionKeyInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && connectSessionBtn) {
+                connectSessionBtn.click();
+            }
+        });
+    }
+}
 
 function setSessionKey(key) {
     console.log('Setting session key:', key);

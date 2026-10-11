@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Framed - Collaborative Drawing</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="vendor/phosphor/phosphor.css">
@@ -17,6 +17,9 @@
             <div class="app-title">Framed International: Collaborative Drawing Studio</div>
             <div class="top-controls">
                 <span class="canvas-info">Canvas: 800 x 600px | Preview: 8 FPS</span>
+                <span class="participant-badge" id="participantBadge" title="Active participants in session">
+                    <i class="ph ph-users"></i> <span id="participantCount">1</span>
+                </span>
                 <button id="sessionBtn" class="btn btn-sm btn-outline">Set Session</button>
             </div>
         </header>
@@ -61,9 +64,9 @@
                 <div class="color-gradient-gray" title="Grayscale"></div>
             </div>
 
-            <!-- Trash Button -->
+            <!-- Trash Button (Disabled temporarily)
             <div class="action-group">
-                <button id="clearBtn" class="tool-btn danger" title="Clear Canvas"><i class="ph ph-trash"></i></button>
+                <!-- <button id="clearBtn" class="tool-btn danger" title="Clear Canvas"><i class="ph ph-trash"></i></button> -->
             </div>
 
             <div class="spacer"></div>
@@ -103,8 +106,18 @@
 
         <!-- Bottom Timeline -->
         <footer class="timeline-area">
-            <div class="frames-grid" id="frameGrid">
-                <!-- Javascript will populate frame buttons -->
+            <div class="timeline-row">
+                <div class="frame-nav-controls">
+                    <button id="prevFrameBtn" class="frame-nav-btn" title="Previous Frame (Left Arrow)" aria-label="Previous Frame">
+                        <i class="ph ph-caret-left"></i>
+                    </button>
+                    <button id="nextFrameBtn" class="frame-nav-btn" title="Next Frame (Right Arrow)" aria-label="Next Frame">
+                        <i class="ph ph-caret-right"></i>
+                    </button>
+                </div>
+                <div class="frames-grid" id="frameGrid">
+                    <!-- Javascript will populate frame buttons -->
+                </div>
             </div>
         </footer>
 

@@ -57,6 +57,21 @@ document.getElementById('clearPalette').addEventListener('click', () => {
     renderPalette();
 });
 
+let isInitialLoaded = false;
+let userHasEditedInputs = false;
+
+function markInputsDirty() {
+    userHasEditedInputs = true;
+}
+
+['width', 'height', 'fps', 'maxFrames'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('input', markInputsDirty);
+        el.addEventListener('change', markInputsDirty);
+    }
+});
+
 async function fetchInfo() {
     try {
         const res = await fetch('/api/status');
@@ -64,8 +79,8 @@ async function fetchInfo() {
         document.getElementById('sessionKey').textContent = data.sessionKey;
         document.getElementById('connectionCount').textContent = data.connections;
 
-        // Only update inputs if not focused (to allow typing)
-        if (document.activeElement.tagName !== 'INPUT') {
+        // Populate inputs on initial load only so background polling never overwrites user edits
+        if (!isInitialLoaded) {
             if (data.settings) {
                 document.getElementById('width').value = data.settings.width;
                 document.getElementById('height').value = data.settings.height;
@@ -76,6 +91,7 @@ async function fetchInfo() {
                     renderPalette();
                 }
             }
+            isInitialLoaded = true;
         }
     } catch (e) {
         console.error(e);
@@ -89,14 +105,23 @@ async function updateSettings() {
     const maxFrames = document.getElementById('maxFrames').value;
 
     try {
-        await fetch('/api/settings', {
+        const res = await fetch('/api/settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ width, height, fps, maxFrames, palette: paletteColors })
         });
+        const data = await res.json();
+        if (data.success && data.settings) {
+            document.getElementById('width').value = data.settings.width;
+            document.getElementById('height').value = data.settings.height;
+            document.getElementById('fps').value = data.settings.fps;
+            document.getElementById('maxFrames').value = data.settings.maxFrames;
+            paletteColors = [...(data.settings.palette || [])];
+            renderPalette();
+        }
         paletteDirty = false;
+        userHasEditedInputs = false;
         alert('Settings Updated & Broadcasted!');
-        await fetchInfo();
     } catch (e) {
         console.error(e);
         alert('Error updating settings');

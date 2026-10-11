@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Collaborative Drawing</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="vendor/phosphor/phosphor.css">
@@ -12,12 +12,14 @@
 <body>
     <div class="app-container">
         <div id="customCursor" class="custom-cursor"></div>
-        <!-- Top Toolbar -->
         <!-- Top Info Bar -->
         <header class="top-bar">
             <div class="app-title">Framed International: Collaborative Drawing Studio</div>
             <div class="top-controls">
                 <span class="canvas-info">Canvas: 800 x 600px | Preview: 400 x 300px</span>
+                <span class="participant-badge" id="participantBadge" title="Active participants in session">
+                    <i class="ph ph-users"></i> <span id="participantCount">1</span>
+                </span>
                 <a href="/config" class="btn btn-sm btn-outline">Config</a>
             </div>
         </header>
@@ -62,9 +64,9 @@
                 <div class="color-gradient-gray" title="Grayscale"></div>
             </div>
 
-            <!-- Trash Button -->
+            <!-- Trash Button (Disabled temporarily)
             <div class="action-group">
-                <button id="clearBtn" class="tool-btn danger" title="Clear Canvas"><i class="ph ph-trash"></i></button>
+                <!-- <button id="clearBtn" class="tool-btn danger" title="Clear Canvas"><i class="ph ph-trash"></i></button> -->
             </div>
 
             <div class="spacer"></div>
@@ -104,29 +106,18 @@
 
         <!-- Bottom Timeline -->
         <footer class="timeline-area">
-
-            <div class="frames-grid" id="frameGrid">
-                <!-- Javascript will populate, or we hardcode for structure -->
-                <button class="frame-btn active">1</button>
-                <button class="frame-btn">2</button>
-                <button class="frame-btn">3</button>
-                <button class="frame-btn">4</button>
-                <button class="frame-btn">5</button>
-                <button class="frame-btn">6</button>
-                <button class="frame-btn">7</button>
-                <button class="frame-btn">8</button>
-                <button class="frame-btn">9</button>
-                <button class="frame-btn">10</button>
-                <button class="frame-btn">11</button>
-                <button class="frame-btn">12</button>
-                <button class="frame-btn">13</button>
-                <button class="frame-btn">14</button>
-                <button class="frame-btn">15</button>
-                <button class="frame-btn">16</button>
-                <button class="frame-btn">17</button>
-                <button class="frame-btn">18</button>
-                <button class="frame-btn">19</button>
-                <button class="frame-btn">20</button>
+            <div class="timeline-row">
+                <div class="frame-nav-controls">
+                    <button id="prevFrameBtn" class="frame-nav-btn" title="Previous Frame (Left Arrow)" aria-label="Previous Frame">
+                        <i class="ph ph-caret-left"></i>
+                    </button>
+                    <button id="nextFrameBtn" class="frame-nav-btn" title="Next Frame (Right Arrow)" aria-label="Next Frame">
+                        <i class="ph ph-caret-right"></i>
+                    </button>
+                </div>
+                <div class="frames-grid" id="frameGrid">
+                    <!-- Javascript will populate frame buttons -->
+                </div>
             </div>
         </footer>
 

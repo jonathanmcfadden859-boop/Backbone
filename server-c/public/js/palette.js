@@ -216,28 +216,90 @@
         return new Blob([out], { type: 'application/zip' });
     }
 
+    function getCleanHex(color) {
+        let hex = normalizeColorHex(color);
+        return hex.replace('#', '').toUpperCase();
+    }
+
+    function getActiveFrameNumber() {
+        const idx = (typeof window.getCurrentFrameIndex === 'function') ? window.getCurrentFrameIndex() : 0;
+        return String(idx + 1).padStart(2, '0');
+    }
+
     function getSeparationData() {
         if (!window.palette || window.palette.length === 0) return [];
         const canvasEl = document.getElementById('canvas');
         const w = (canvasEl && canvasEl.getAttribute('width')) || 800;
         const h = (canvasEl && canvasEl.getAttribute('height')) || 600;
         const currentPaths = window.paths || [];
+        const frameNum = getActiveFrameNumber();
 
         return window.palette.map((color, index) => {
             const matchingPaths = currentPaths.filter(p => pathMatchesPaletteColor(p, color));
             const svgContent = (typeof generateFormattedSVG === 'function')
                 ? generateFormattedSVG(matchingPaths, w, h)
                 : '';
-            const cleanHex = color.replace('#', '').toLowerCase();
-            const filename = `drawing-color-${index + 1}-${cleanHex}.svg`;
+            const cleanHex = getCleanHex(color);
+            const filename = `frame-${frameNum}-${cleanHex}.svg`;
             return {
                 index: index + 1,
                 color,
+                cleanHex,
                 filename,
                 svgContent,
                 pathCount: matchingPaths.length
             };
         });
+    }
+
+    function getAllFramesColorSeparatedData() {
+        if (!window.palette || window.palette.length === 0) return [];
+        const canvasEl = document.getElementById('canvas');
+        const w = (canvasEl && canvasEl.getAttribute('width')) || 800;
+        const h = (canvasEl && canvasEl.getAttribute('height')) || 600;
+        const allFrames = (typeof window.getAllFrames === 'function') ? window.getAllFrames() : [window.paths || []];
+        const maxFrames = (typeof window.getMaxFrames === 'function') ? window.getMaxFrames() : allFrames.length;
+
+        const files = [];
+        for (let f = 0; f < maxFrames; f++) {
+            const framePaths = allFrames[f] || [];
+            const frameNum = String(f + 1).padStart(2, '0');
+
+            window.palette.forEach(color => {
+                const cleanHex = getCleanHex(color);
+                const matchingPaths = framePaths.filter(p => pathMatchesPaletteColor(p, color));
+                const svgContent = (typeof generateFormattedSVG === 'function')
+                    ? generateFormattedSVG(matchingPaths, w, h)
+                    : '';
+                files.push({
+                    filename: `frame-${frameNum}-${cleanHex}.svg`,
+                    content: svgContent
+                });
+            });
+        }
+        return files;
+    }
+
+    function getAllFramesCombinedData() {
+        const canvasEl = document.getElementById('canvas');
+        const w = (canvasEl && canvasEl.getAttribute('width')) || 800;
+        const h = (canvasEl && canvasEl.getAttribute('height')) || 600;
+        const allFrames = (typeof window.getAllFrames === 'function') ? window.getAllFrames() : [window.paths || []];
+        const maxFrames = (typeof window.getMaxFrames === 'function') ? window.getMaxFrames() : allFrames.length;
+
+        const files = [];
+        for (let f = 0; f < maxFrames; f++) {
+            const framePaths = allFrames[f] || [];
+            const frameNum = String(f + 1).padStart(2, '0');
+            const svgContent = (typeof generateFormattedSVG === 'function')
+                ? generateFormattedSVG(framePaths, w, h)
+                : '';
+            files.push({
+                filename: `frame-${frameNum}.svg`,
+                content: svgContent
+            });
+        }
+        return files;
     }
 
     function createSaveModalDOM() {
@@ -255,30 +317,42 @@
                 <button type="button" class="save-modal-close" id="saveModalClose" aria-label="Close">&times;</button>
             </div>
             <div class="save-modal-body">
-                <!-- Option 1: Single Document Save -->
+                <!-- Option 1: Active Frame Export -->
                 <div class="save-option-card">
-                    <div class="save-option-title">Single Document Save</div>
-                    <div class="save-option-desc">Save the entire drawing as 1 complete SVG document with all colors combined.</div>
-                    <div>
+                    <div class="save-option-title" id="activeFrameCardTitle">Active Frame Export</div>
+                    <div class="save-option-desc">Save the currently selected frame as a single document or separated by color plates.</div>
+                    <div style="margin-bottom: 6px;">
                         <button type="button" class="save-btn-primary" id="saveWholeImageBtn">
-                            <i class="ph ph-file-svg"></i> Save Single Document (SVG)
+                            <i class="ph ph-file-svg"></i> Save Single Frame (SVG)
                         </button>
+                    </div>
+
+                    <div style="border-top: 1px solid #3c4043; padding-top: 10px; margin-top: 6px;">
+                        <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 4px;" id="sepCardTitle">Active Frame Color Plates</div>
+                        <div class="separations-list" id="separationsList"></div>
+                        <div class="save-actions-row">
+                            <button type="button" class="save-btn-primary" id="saveActiveZipBtn">
+                                <i class="ph ph-archive"></i> Download Active Separations (.zip)
+                            </button>
+                            <button type="button" class="save-btn-secondary" id="saveActiveSvgBtn">
+                                <i class="ph ph-download-simple"></i> Download Separate SVG Files
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Option 2: Color Separation -->
+                <!-- Option 2: All Frames Animation Sequence -->
                 <div class="save-option-card">
-                    <div class="save-option-title" id="sepCardTitle">Color Separation</div>
-                    <div class="save-option-desc">
-                        Save each predefined palette color as a separate SVG document (aligned layers for screen printing, risograph, or vinyl cutting).
+                    <div class="save-option-title" id="allFramesCardTitle">All Frames Animation Sequence</div>
+                    <div class="save-option-desc" id="allFramesCardDesc">
+                        Export all animation frames in one action as bundled ZIP archives.
                     </div>
-                    <div class="separations-list" id="separationsList"></div>
                     <div class="save-actions-row">
-                        <button type="button" class="save-btn-primary" id="saveAllZipBtn">
-                            <i class="ph ph-archive"></i> Download All Documents (.zip)
+                        <button type="button" class="save-btn-primary" id="saveAllFramesCombinedZipBtn">
+                            <i class="ph ph-archive"></i> Download All Frames Combined (.zip)
                         </button>
-                        <button type="button" class="save-btn-secondary" id="saveAllSvgBtn">
-                            <i class="ph ph-download-simple"></i> Download Separate SVG Files
+                        <button type="button" class="save-btn-primary" id="saveAllFramesSeparatedZipBtn" style="background-color: #7c3aed;">
+                            <i class="ph ph-stack"></i> Download All Frames Color Separated (.zip)
                         </button>
                     </div>
                 </div>
@@ -300,19 +374,20 @@
         modal.querySelector('#saveWholeImageBtn').addEventListener('click', () => {
             modal.close();
             if (typeof window.exportSVG === 'function') {
-                window.exportSVG();
+                window.exportSVG(true);
             }
         });
 
-        modal.querySelector('#saveAllZipBtn').addEventListener('click', () => {
+        modal.querySelector('#saveActiveZipBtn').addEventListener('click', () => {
             const seps = getSeparationData();
             if (!seps || seps.length === 0) return;
+            const frameNum = getActiveFrameNumber();
             modal.close();
             const zipBlob = createSimpleZip(seps.map(s => ({ filename: s.filename, content: s.svgContent })));
-            downloadBlob(zipBlob, 'drawing-color-separations.zip');
+            downloadBlob(zipBlob, `frame-${frameNum}-color-separations.zip`);
         });
 
-        modal.querySelector('#saveAllSvgBtn').addEventListener('click', () => {
+        modal.querySelector('#saveActiveSvgBtn').addEventListener('click', () => {
             const seps = getSeparationData();
             if (!seps || seps.length === 0) return;
             modal.close();
@@ -322,6 +397,24 @@
                     downloadBlob(blob, s.filename);
                 }, i * 250);
             });
+        });
+
+        modal.querySelector('#saveAllFramesCombinedZipBtn').addEventListener('click', () => {
+            const files = getAllFramesCombinedData();
+            if (!files || files.length === 0) return;
+            const maxFrames = (typeof window.getMaxFrames === 'function') ? window.getMaxFrames() : files.length;
+            modal.close();
+            const zipBlob = createSimpleZip(files);
+            downloadBlob(zipBlob, `all-frames-combined-01-${String(maxFrames).padStart(2, '0')}.zip`);
+        });
+
+        modal.querySelector('#saveAllFramesSeparatedZipBtn').addEventListener('click', () => {
+            const files = getAllFramesColorSeparatedData();
+            if (!files || files.length === 0) return;
+            const maxFrames = (typeof window.getMaxFrames === 'function') ? window.getMaxFrames() : 20;
+            modal.close();
+            const zipBlob = createSimpleZip(files);
+            downloadBlob(zipBlob, `all-frames-color-separated-01-${String(maxFrames).padStart(2, '0')}.zip`);
         });
 
         return modal;
@@ -334,20 +427,55 @@
         }
         const modal = createSaveModalDOM();
         const seps = getSeparationData();
+        const frameNum = getActiveFrameNumber();
+        const maxFrames = (typeof window.getMaxFrames === 'function') ? window.getMaxFrames() : 20;
+        const colorCount = window.palette.length;
+        const totalSeparated = maxFrames * colorCount;
+
+        const activeTitleEl = modal.querySelector('#activeFrameCardTitle');
+        if (activeTitleEl) {
+            activeTitleEl.textContent = `Active Frame (Frame ${frameNum})`;
+        }
+
+        const wholeImageBtn = modal.querySelector('#saveWholeImageBtn');
+        if (wholeImageBtn) {
+            wholeImageBtn.innerHTML = `<i class="ph ph-file-svg"></i> Save Single Frame (frame-${frameNum}.svg)`;
+        }
 
         const titleEl = modal.querySelector('#sepCardTitle');
         if (titleEl) {
-            titleEl.textContent = `Color Separation (${seps.length} Separate Documents)`;
+            titleEl.textContent = `Active Frame Color Plates (${seps.length} Plates)`;
         }
 
-        const zipBtn = modal.querySelector('#saveAllZipBtn');
-        if (zipBtn) {
-            zipBtn.innerHTML = `<i class="ph ph-archive"></i> Download All ${seps.length} Documents (.zip)`;
+        const activeZipBtn = modal.querySelector('#saveActiveZipBtn');
+        if (activeZipBtn) {
+            activeZipBtn.innerHTML = `<i class="ph ph-archive"></i> Download Active Separations (${seps.length} Files .zip)`;
         }
 
-        const svgBtn = modal.querySelector('#saveAllSvgBtn');
-        if (svgBtn) {
-            svgBtn.innerHTML = `<i class="ph ph-download-simple"></i> Download ${seps.length} Separate SVG Files`;
+        const activeSvgBtn = modal.querySelector('#saveActiveSvgBtn');
+        if (activeSvgBtn) {
+            activeSvgBtn.innerHTML = `<i class="ph ph-download-simple"></i> Download ${seps.length} Separate SVG Files`;
+        }
+
+        const allTitleEl = modal.querySelector('#allFramesCardTitle');
+        if (allTitleEl) {
+            allTitleEl.textContent = `All Frames Animation Sequence (${maxFrames} Frames)`;
+        }
+
+        const allDescEl = modal.querySelector('#allFramesCardDesc');
+        if (allDescEl) {
+            allDescEl.textContent = `Export all ${maxFrames} frames. Color separation generates ${totalSeparated} total files (${maxFrames} frames × ${colorCount} colors, e.g. frame-01-FF00FA.svg).`;
+        }
+
+        const allCombBtn = modal.querySelector('#saveAllFramesCombinedZipBtn');
+        if (allCombBtn) {
+            allCombBtn.innerHTML = `<i class="ph ph-archive"></i> Download All Frames Combined (${maxFrames} Files .zip)`;
+        }
+
+        const allSepBtn = modal.querySelector('#saveAllFramesSeparatedZipBtn');
+        if (allSepBtn) {
+            allSepBtn.innerHTML = `<i class="ph ph-stack"></i> Download All Frames Color Separated (${totalSeparated} Files .zip)`;
+            allSepBtn.title = `Export ${totalSeparated} SVG files (${maxFrames} frames × ${colorCount} colors)`;
         }
 
         const listEl = modal.querySelector('#separationsList');
@@ -380,7 +508,7 @@
                 dlBtn.type = 'button';
                 dlBtn.className = 'separation-btn-single';
                 dlBtn.title = `Download ${s.filename}`;
-                dlBtn.innerHTML = '<i class="ph ph-download-simple"></i> SVG';
+                dlBtn.innerHTML = `<i class="ph ph-download-simple"></i> ${s.cleanHex}`;
                 dlBtn.addEventListener('click', () => {
                     const blob = new Blob([s.svgContent], { type: 'image/svg+xml' });
                     downloadBlob(blob, s.filename);

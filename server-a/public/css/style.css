@@ -50,6 +50,24 @@ body {
     align-items: center;
 }
 
+.participant-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--border-color);
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+.participant-badge i {
+    color: #10b981;
+    font-size: 0.95rem;
+}
+
 .canvas-info {
     color: var(--text-muted);
 }
@@ -300,6 +318,9 @@ body {
     background-color: #1a1a1a;
     border-radius: 4px;
     overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 #canvas {
@@ -307,6 +328,8 @@ body {
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     cursor: none;
     /* Hide default cursor */
+    overflow: hidden;
+    touch-action: none;
 }
 
 .custom-cursor {
@@ -351,6 +374,45 @@ body {
     flex-direction: column;
     justify-content: center;
     gap: 10px;
+}
+
+.timeline-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.frame-nav-controls {
+    display: flex;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.frame-nav-btn {
+    width: 36px;
+    height: 36px;
+    background-color: var(--bg-toolbar);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+}
+
+.frame-nav-btn:hover {
+    background-color: #4a4f54;
+    border-color: var(--accent-blue);
+    color: white;
+}
+
+.frame-nav-btn:active {
+    background-color: var(--accent-blue);
 }
 
 .timeline-controls {
@@ -461,6 +523,68 @@ body {
 
 .test-view-container {
     padding: 2rem;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 10000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background-color: #1e1e1e;
+    padding: 30px;
+    border-radius: 8px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    color: #e8eaed;
+}
+
+.modal-content h2 {
+    margin-top: 0;
+    color: #fff;
+    font-size: 24px;
+    margin-bottom: 15px;
+}
+
+.modal-content p {
+    margin-bottom: 20px;
+    color: #b8b8b8;
+}
+
+.modal-content input[type="text"] {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    color: #e8eaed;
+    border-radius: 4px;
+}
+
+.modal-content input[type="text"]:focus {
+    outline: none;
+    border-color: #4a9eff;
+}
+
+.btn {
+    background-color: var(--accent-blue);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.btn:hover {
+    background-color: #2563eb;
 }
 .limited-palette { display: flex; gap: 6px; align-items: center; }
 .color-picker.palette-limited > .color-gradient,
@@ -666,3 +790,59 @@ body {
     padding: 12px 20px 16px;
     border-top: 1px solid #3c4043;
 }
+
+/* Responsive Media Queries (Mobile & Tablet Support) */
+@media (max-width: 768px) {
+    .top-bar {
+        height: auto;
+        padding: 6px 12px;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .app-title {
+        font-size: 0.75rem;
+    }
+
+    .top-controls {
+        gap: 8px;
+    }
+
+    .canvas-info {
+        display: none;
+    }
+
+    .toolbar {
+        height: auto;
+        padding: 6px 10px;
+        gap: 8px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .workspace {
+        flex-direction: column;
+        padding: 8px;
+        overflow-y: auto;
+    }
+
+    .preview-panel {
+        max-height: 200px;
+        flex: none;
+    }
+
+    .timeline-area {
+        height: 75px;
+        padding: 6px 12px;
+    }
+
+    .save-modal {
+        width: min(94vw, 480px);
+        max-height: 85vh;
+    }
+
+    .save-option-card {
+        padding: 10px 12px;
+    }
+}
+
