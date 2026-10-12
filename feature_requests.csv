@@ -1,0 +1,17 @@
+,,,Ask,Priority,Implemented,Notes
+,,,Set the project to 24 frames,,no need to implement ,already can set from admin
+,,,Remove the trashbin,,to do,Remove the trashbin control from the drawing interface by simply commenting it out. We might need to re-implement it later.
+,,,Add white as a fourth drawing color,,no need to implement ,already can set from admin
+,,,Show the number of active participants,,to do,Display a small participant count in a corner. Confirm what counts as active or logged in.
+,,,Correct exported frame numbering,,to do,A single-frame export should use the selected frame number; currently the name can be one frame ahead or inconsistent.
+,,,Save all frames with one action,,to do,Add option to  Save dialog. Should export every frame with correct numbering. Confirm the desired file format and packaging.
+,,,Place all frames directly into an A3 template,,no need to implement ,Aspect ratio can be set from admin panel
+,,,Export three black-and-white color separations per frame,,no need to implement ,Bad idea as people will get confused between color layers
+,,,Use arrow keys to move between frames,,to do,Add left and right arrows before the frame button row
+,,,Allow drawing partially beyond frame edges,,to do,A circle should be drawable with half of it outside the frame; confirm how the exported frame is cropped.
+,,,Show other participants' marks as they draw,,no need to implement ,Can't get this out into the world by next week. Might not be a good idea in terms of speed and functionality.
+,,,Fix circle shrinking after mouse release,,to do,"On desktop, larger pencil sizes make a circle smaller after release than its drawing preview. Reproduce and compare preview with result."
+,,,Check tablet drawing support,,to do,Test touch and stylus drawing on the intended tablets; no specific tablet defect was described.
+,,,Check phone support,,to do,"Test whether drawing, frame navigation, and saving work on a phone."
+,,,Limit participants per frame,,no need to implement ,Future option to support a more cadavre exquis style of participation; cap and behavior need definition.
+,,,Limit drawing time per frame,,no need to implement ,Future option to support a more cadavre exquis style of participation; duration and handoff need definition.
